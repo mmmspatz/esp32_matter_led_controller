@@ -1,0 +1,21 @@
+.venv-zephyr/
+.west/
+
+# West-managed source trees populated by `west update`.
+/zephyr/
+/modules/
+/bootloader/
+/tools/
+
+# Build directories
+/build/
+/build_*/
+
+# Per-device provisioning records (pairing codes are secrets).
+/devices/
+
+# Python detritus.
+*.pyc
+__pycache__/
+
+*.zap~

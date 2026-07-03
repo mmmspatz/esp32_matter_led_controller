@@ -1,0 +1,14 @@
+identifier: btf_wled_esp32/esp32/procpu
+name: BTF WLED ESP32 PROCPU
+type: mcu
+arch: xtensa
+toolchain:
+  - zephyr
+supported:
+  - gpio
+  - uart
+  - nvs
+  - pwm
+  - entropy
+  - input
+vendor: btf

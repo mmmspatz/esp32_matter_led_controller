@@ -1,0 +1,6 @@
+board:
+  name: btf_wled_esp32
+  full_name: BTF-Lighting ESP32 WLED Controller
+  vendor: btf
+  socs:
+  - name: esp32

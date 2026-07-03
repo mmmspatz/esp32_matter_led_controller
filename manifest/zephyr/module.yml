@@ -1,0 +1,5 @@
+name: esp32_matter_led_controller
+build:
+  settings:
+    dts_root: ..
+    board_root: ..

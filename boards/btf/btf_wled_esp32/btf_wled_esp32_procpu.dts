@@ -1,0 +1,121 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * BTF-Lighting "ESP32 WLED" controller: ESP32-WROOM-32E, 4MB flash, no
+ * PSRAM. Three MOSFET-buffered PWM channels (CH1/CH2/CH3 on the silk =
+ * GPIO27/26/25), one push button (S1, shared with the GPIO0 boot strap),
+ * USB-UART on UART0. The digital-strip DAT line (GPIO16) and microphone
+ * (GPIO36) are unused by this firmware.
+ */
+/dts-v1/;
+
+#include <espressif/esp32/esp32_wroom_32ue_n4.dtsi>
+#include "btf_wled_esp32-pinctrl.dtsi"
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
+#include <btf/partitions_btf_4M.dtsi>
+
+/ {
+	model = "BTF WLED ESP32 PROCPU";
+	compatible = "espressif,esp32";
+
+	aliases {
+		uart-0 = &uart0;
+		sw0 = &button0;
+		watchdog0 = &wdt0;
+		pwm-led0 = &pwm_led_ch1;
+		pwm-led1 = &pwm_led_ch2;
+		pwm-led2 = &pwm_led_ch3;
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+
+		button0: button_0 {
+			gpios = <&gpio0 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "S1 Button";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+	};
+
+	pwm_leds {
+		compatible = "pwm-leds";
+
+		/* 51200ns = 19.531kHz = 80MHz APB / 2^12: inaudible, and the
+		 * highest frequency that still yields 12-bit LEDC resolution.
+		 */
+		pwm_led_ch1: pwm_led_1 {
+			pwms = <&ledc0 0 51200 PWM_POLARITY_NORMAL>;
+			label = "CH1 GPIO27";
+		};
+
+		pwm_led_ch2: pwm_led_2 {
+			pwms = <&ledc0 1 51200 PWM_POLARITY_NORMAL>;
+			label = "CH2 GPIO26";
+		};
+
+		pwm_led_ch3: pwm_led_3 {
+			pwms = <&ledc0 2 51200 PWM_POLARITY_NORMAL>;
+			label = "CH3 GPIO25";
+		};
+	};
+
+	chosen {
+		zephyr,sram = &sram1;
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
+		zephyr,bt-hci = &esp32_bt_hci;
+	};
+};
+
+&uart0 {
+	status = "okay";
+	current-speed = <115200>;
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-names = "default";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+&ledc0 {
+	pinctrl-0 = <&ledc0_default>;
+	pinctrl-names = "default";
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	channel0@0 {
+		reg = <0x0>;
+		timer = <0>;
+	};
+
+	channel1@1 {
+		reg = <0x1>;
+		timer = <0>;
+	};
+
+	channel2@2 {
+		reg = <0x2>;
+		timer = <0>;
+	};
+};
+
+&trng0 {
+	status = "okay";
+};
+
+&esp32_bt_hci {
+	status = "okay";
+};
+
+&wifi {
+	status = "okay";
+};
