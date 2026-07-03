@@ -1,2 +1,0 @@
-# Load board Kconfig descriptions.
-osource "/home/mspatz/code/esp32_matter_led_controller/zephyr/boards/native/native_sim/Kconfig.native_sim"

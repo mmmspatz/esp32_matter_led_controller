@@ -1,3 +1,4 @@
+# Python environment / west workspace state.
 .venv-zephyr/
 .west/
 
@@ -7,9 +8,12 @@
 /bootloader/
 /tools/
 
-# Build directories
+# Build directories.
 /build/
 /build_*/
+
+# Zephyr Twister test output (base dir + rotated .1/.2/... siblings).
+twister-out*/
 
 # Per-device provisioning records (pairing codes are secrets).
 /devices/
@@ -17,6 +21,17 @@
 # Python detritus.
 *.pyc
 __pycache__/
-
-*.zap~
 .python-version
+
+# Editor / OS cruft.
+.vscode/
+.idea/
+.clangd/
+.DS_Store
+*.swp
+*.orig
+*.rej
+*~
+
+# ZAP autosave backups.
+*.zap~

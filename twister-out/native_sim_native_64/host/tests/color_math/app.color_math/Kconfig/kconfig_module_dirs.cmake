@@ -1,7 +1,0 @@
-set(kconfig_env_dirs)
-list(APPEND kconfig_env_dirs ZEPHYR_ESP32_MATTER_LED_CONTROLLER_MODULE_DIR=/home/mspatz/code/esp32_matter_led_controller/manifest)
-list(APPEND kconfig_env_dirs ZEPHYR_HAL_ESPRESSIF_MODULE_DIR=/home/mspatz/code/esp32_matter_led_controller/modules/hal/espressif)
-list(APPEND kconfig_env_dirs ZEPHYR_MBEDTLS_MODULE_DIR=/home/mspatz/code/esp32_matter_led_controller/modules/crypto/mbedtls)
-list(APPEND kconfig_env_dirs ZEPHYR_MCUBOOT_MODULE_DIR=/home/mspatz/code/esp32_matter_led_controller/bootloader/mcuboot)
-list(APPEND kconfig_env_dirs ZEPHYR_OPENTHREAD_MODULE_DIR=/home/mspatz/code/esp32_matter_led_controller/modules/lib/openthread)
-list(APPEND kconfig_env_dirs ZEPHYR_PICOLIBC_MODULE_DIR=/home/mspatz/code/esp32_matter_led_controller/modules/lib/picolibc)
