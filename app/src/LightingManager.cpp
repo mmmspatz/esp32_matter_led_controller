@@ -92,8 +92,41 @@ void LightingManager::SetLevel(uint8_t level)
 void LightingManager::SetColorTempMireds(uint16_t mireds)
 {
     mMireds = mireds;
+#ifdef CONFIG_LEDCTRL_MODE_RGB
+    mColorMode = kColorTemp;
+#endif
     Apply();
 }
+
+#ifdef CONFIG_LEDCTRL_MODE_RGB
+void LightingManager::SetColorMode(uint8_t mode)
+{
+    mColorMode = mode;
+    Apply();
+}
+
+void LightingManager::SetHue(uint8_t hue)
+{
+    mHue       = hue;
+    mColorMode = kHueSaturation;
+    Apply();
+}
+
+void LightingManager::SetSaturation(uint8_t sat)
+{
+    mSat       = sat;
+    mColorMode = kHueSaturation;
+    Apply();
+}
+
+void LightingManager::SetXy(uint16_t x, uint16_t y)
+{
+    mX         = x;
+    mY         = y;
+    mColorMode = kXy;
+    Apply();
+}
+#endif
 
 void LightingManager::Apply()
 {
@@ -109,13 +142,23 @@ void LightingManager::Apply()
         targets[CONFIG_LEDCTRL_CH_WARM] = warm * brightness;
         targets[CONFIG_LEDCTRL_CH_COOL] = cool * brightness;
 #else
-        /* RGB mode grows XY/HS handling with the rgb_light data model;
-         * until then CT is emulated onto the RGB channels.
-         */
-        cm_rgb_t rgb = cm_ct_to_rgb(mMireds);
-        targets[0]   = ((float) rgb.r / 255.0f) * brightness;
-        targets[1]   = ((float) rgb.g / 255.0f) * brightness;
-        targets[2]   = ((float) rgb.b / 255.0f) * brightness;
+        cm_rgb_t rgb;
+        switch (mColorMode)
+        {
+        case kHueSaturation:
+            rgb = cm_hsv_to_rgb(mHue, mSat);
+            break;
+        case kXy:
+            rgb = cm_xy_to_rgb(mX, mY);
+            break;
+        case kColorTemp:
+        default:
+            rgb = cm_ct_to_rgb(mMireds);
+            break;
+        }
+        targets[0] = ((float) rgb.r / 255.0f) * brightness;
+        targets[1] = ((float) rgb.g / 255.0f) * brightness;
+        targets[2] = ((float) rgb.b / 255.0f) * brightness;
 #endif
     }
 

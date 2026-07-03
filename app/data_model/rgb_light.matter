@@ -2556,7 +2556,7 @@ endpoint 0 {
   }
 }
 endpoint 1 {
-  device type ma_colortemperaturelight = 268, version 1;
+  device type ma_extendedcolorlight = 268, version 1;
 
 
   server cluster Identify {
@@ -2649,23 +2649,43 @@ endpoint 1 {
   }
 
   server cluster ColorControl {
+    persist  attribute currentHue default = 0x00;
+    persist  attribute currentSaturation default = 0x00;
     ram      attribute remainingTime default = 0x0000;
-    persist  attribute colorTemperatureMireds default = 250;
+    persist  attribute currentX default = 0x616B;
+    persist  attribute currentY default = 0x607D;
+    persist  attribute colorTemperatureMireds default = 0x00FA;
     persist  attribute colorMode default = 0x01;
     ram      attribute options default = 0x00;
     ram      attribute numberOfPrimaries;
+    persist  attribute enhancedCurrentHue default = 0x0000;
     persist  attribute enhancedColorMode default = 0x01;
-    ram      attribute colorCapabilities default = 16;
+    persist  attribute colorLoopActive default = 0x00;
+    persist  attribute colorLoopDirection default = 0x00;
+    persist  attribute colorLoopTime default = 0x0019;
+    ram      attribute colorLoopStartEnhancedHue default = 0x2300;
+    ram      attribute colorLoopStoredEnhancedHue default = 0x0000;
+    ram      attribute colorCapabilities default = 25;
     ram      attribute colorTempPhysicalMinMireds default = 154;
     ram      attribute colorTempPhysicalMaxMireds default = 370;
-    ram      attribute coupleColorTempToLevelMinMireds default = 154;
+    ram      attribute coupleColorTempToLevelMinMireds default = 0x009A;
     persist  attribute startUpColorTemperatureMireds;
     callback attribute generatedCommandList;
     callback attribute acceptedCommandList;
     callback attribute attributeList;
-    ram      attribute featureMap default = 16;
+    ram      attribute featureMap default = 25;
     ram      attribute clusterRevision default = 0x0009;
 
+    handle command MoveToHue;
+    handle command MoveHue;
+    handle command StepHue;
+    handle command MoveToSaturation;
+    handle command MoveSaturation;
+    handle command StepSaturation;
+    handle command MoveToHueAndSaturation;
+    handle command MoveToColor;
+    handle command MoveColor;
+    handle command StepColor;
     handle command MoveToColorTemperature;
     handle command StopMoveStep;
     handle command MoveColorTemperature;
