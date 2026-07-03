@@ -1,0 +1,50 @@
+Zephyr platform: don't add an mbedTLS entropy source under CHIP_CRYPTO_PSA.
+
+With chip_crypto="psa" the PAL's add_entropy_source() is a stub that
+returns CHIP_ERROR_UNSUPPORTED_CHIP_FEATURE (PSA owns its RNG; on
+Zephyr 4.4 it is CONFIG_MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG backed by the
+hardware TRNG csprng driver). PlatformManagerImpl::_InitChipStack()
+only skips the call for NRF_SECURITY or the mbedTLS entropy-glue
+Kconfigs, none of which exist in this configuration, so InitChipStack()
+fails at boot with 0x6C. Gate the entropy-source block on
+!CHIP_CRYPTO_PSA as well.
+
+Upstream candidate: yes (any generic-Zephyr PSA build hits this).
+
+diff --git a/src/platform/Zephyr/PlatformManagerImpl.cpp b/src/platform/Zephyr/PlatformManagerImpl.cpp
+index 251fe8081d..b8cb907499 100644
+--- a/src/platform/Zephyr/PlatformManagerImpl.cpp
++++ b/src/platform/Zephyr/PlatformManagerImpl.cpp
+@@ -49,8 +49,8 @@ PlatformManagerImpl PlatformManagerImpl::sInstance{ sChipThreadStack };
+ 
+ static k_timer sOperationalHoursSavingTimer;
+ 
+-#if !defined(CONFIG_NRF_SECURITY) && !defined(CONFIG_MBEDTLS_ZEPHYR_ENTROPY) && !defined(CONFIG_MBEDTLS_ENTROPY_POLL_ZEPHYR) &&    \
+-    !defined(CONFIG_MBEDTLS_PSA_DRIVER_GET_ENTROPY)
++#if !defined(CONFIG_NRF_SECURITY) && !CHIP_CRYPTO_PSA && !defined(CONFIG_MBEDTLS_ZEPHYR_ENTROPY) &&                              \
++    !defined(CONFIG_MBEDTLS_ENTROPY_POLL_ZEPHYR) && !defined(CONFIG_MBEDTLS_PSA_DRIVER_GET_ENTROPY)
+ static bool sChipStackEntropySourceAdded = false;
+ static int app_entropy_source(void * data, unsigned char * output, size_t len, size_t * olen)
+ {
+@@ -122,8 +122,8 @@ CHIP_ERROR PlatformManagerImpl::_InitChipStack(void)
+ {
+     CHIP_ERROR err;
+ 
+-#if !defined(CONFIG_NRF_SECURITY) && !defined(CONFIG_MBEDTLS_ZEPHYR_ENTROPY) && !defined(CONFIG_MBEDTLS_ENTROPY_POLL_ZEPHYR) &&    \
+-    !defined(CONFIG_MBEDTLS_PSA_DRIVER_GET_ENTROPY)
++#if !defined(CONFIG_NRF_SECURITY) && !CHIP_CRYPTO_PSA && !defined(CONFIG_MBEDTLS_ZEPHYR_ENTROPY) &&                              \
++    !defined(CONFIG_MBEDTLS_ENTROPY_POLL_ZEPHYR) && !defined(CONFIG_MBEDTLS_PSA_DRIVER_GET_ENTROPY)
+     // Minimum required from source before entropy is released ( with mbedtls_entropy_func() ) (in bytes)
+     const size_t kThreshold = 16;
+ #endif // !defined(CONFIG_NRF_SECURITY) && !defined(CONFIG_MBEDTLS_ZEPHYR_ENTROPY) && !defined(CONFIG_MBEDTLS_ENTROPY_POLL_ZEPHYR)
+@@ -133,8 +133,8 @@ CHIP_ERROR PlatformManagerImpl::_InitChipStack(void)
+     err = Internal::ZephyrConfig::Init();
+     SuccessOrExit(err);
+ 
+-#if !defined(CONFIG_NRF_SECURITY) && !defined(CONFIG_MBEDTLS_ZEPHYR_ENTROPY) && !defined(CONFIG_MBEDTLS_ENTROPY_POLL_ZEPHYR) &&    \
+-    !defined(CONFIG_MBEDTLS_PSA_DRIVER_GET_ENTROPY)
++#if !defined(CONFIG_NRF_SECURITY) && !CHIP_CRYPTO_PSA && !defined(CONFIG_MBEDTLS_ZEPHYR_ENTROPY) &&                              \
++    !defined(CONFIG_MBEDTLS_ENTROPY_POLL_ZEPHYR) && !defined(CONFIG_MBEDTLS_PSA_DRIVER_GET_ENTROPY)
+     if (!sChipStackEntropySourceAdded)
+     {
+         // Add entropy source based on Zephyr entropy driver
