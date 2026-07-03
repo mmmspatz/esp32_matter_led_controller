@@ -32,6 +32,16 @@ config LEDCTRL_MODE_RGB
 
 endchoice
 
+config LEDCTRL_PROV_SHELL
+	bool "Pairing-code provisioning shell commands"
+	depends on SHELL
+	help
+	  matter_prov set/show/clear commands writing the chip-fct settings
+	  keys read by the commissionable-data provider. RAM does not allow
+	  the shell in the production image; enable via the prov.conf build
+	  variant, provision, then flash the production image (the settings
+	  partition survives reflashing).
+
 if LEDCTRL_MODE_CCT
 
 config LEDCTRL_CH_WARM
