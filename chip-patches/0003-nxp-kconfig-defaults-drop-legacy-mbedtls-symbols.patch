@@ -1,0 +1,54 @@
+Zephyr 4.4 (mbedTLS 4.x / TF-PSA-Crypto) removed the legacy
+MBEDTLS_*_C / MBEDTLS_*_ENABLED Kconfig symbols. CHIP's NXP
+Kconfig.defaults (rsourced by config/zephyr/chip-module/Kconfig.defaults
+since the 2026-06 zephyr platform rework) still re-defaults seven of
+them, and defaults on symbols that no longer exist anywhere are
+"defined without a type" warnings, which Zephyr's Kconfig turns into
+hard errors. Drop the dead defaults; the equivalent feature enablement
+now arrives via CHIP_CRYPTO_PSA's PSA_WANT_* implies.
+
+Upstream candidate: yes, but needs a Zephyr-version guard story
+(NXP's downstream Zephyr forks still carry the legacy symbols).
+
+diff --git a/config/nxp/chip-module/Kconfig.defaults b/config/nxp/chip-module/Kconfig.defaults
+index 5a52ca9fbe..13bfae9c65 100644
+--- a/config/nxp/chip-module/Kconfig.defaults
++++ b/config/nxp/chip-module/Kconfig.defaults
+@@ -567,9 +567,6 @@ config MBEDTLS_USER_CONFIG_ENABLE
+ config MBEDTLS_ENTROPY_C
+ 	default y
+ 
+-config MBEDTLS_ENTROPY_POLL_ZEPHYR
+-	default y
+-
+ config MBEDTLS_SSL_MAX_CONTENT_LEN
+ 	default 8192
+ 
+@@ -579,27 +576,9 @@ config MBEDTLS_ENABLE_HEAP
+ config MBEDTLS_HEAP_SIZE
+ 	default 15360
+ 
+-config MBEDTLS_CIPHER_AES_ENABLED
+-	default y
+-
+-config MBEDTLS_CIPHER_CCM_ENABLED
+-	default y
+-
+ config MBEDTLS_CTR_DRBG_C
+ 	default y
+ 
+-config MBEDTLS_CIPHER_MODE_CBC_ENABLED
+-	default y
+-
+-config MBEDTLS_ECP_C
+-	default y
+-
+-config MBEDTLS_ECP_DP_SECP256R1_ENABLED
+-	default y
+-
+-config MBEDTLS_HKDF_C
+-    default y
+-
+ choice CHIP_CRYPTO
+     default CHIP_CRYPTO_PSA
+ 
