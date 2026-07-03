@@ -6,16 +6,16 @@ manifest:
   projects:
     - name: zephyr
       remote: zephyrproject-rtos
-      # v4.3.0 is the newest Zephyr whose mbedTLS packaging (monolithic 3.x)
-      # connectedhomeip can build against. Zephyr v4.4 split the module into
-      # mbedtls 4.x + tf-psa-crypto, which CHIP's legacy-mbedTLS crypto
-      # backend does not follow. Revisit alongside CONFIG_CHIP_CRYPTO_PSA.
-      revision: v4.3.0
+      # v4.4 splits crypto into mbedtls 4.x + tf-psa-crypto and removes the
+      # legacy MBEDTLS_*_C Kconfig surface; CHIP runs on its PSA backend
+      # (CONFIG_CHIP_CRYPTO_PSA). See docs/zephyr-4.4-upgrade-notes.md.
+      revision: v4.4.1
       import:
         # Only pull the modules we actually build against.
         name-allowlist:
           - hal_espressif   # ESP32 HAL, WiFi/BT blobs, esptool west runner
-          - mbedtls         # crypto for CHIP and the WiFi driver
+          - mbedtls         # mbedTLS 4.x front end (X.509/PK for CHIP)
+          - tf-psa-crypto   # PSA crypto core (mbedTLS 4.x split)
           - picolibc        # libc
           - openthread      # never compiled (CONFIG_NET_L2_OPENTHREAD=n), but
                             # CHIP's chip-module declares a hard module
@@ -26,9 +26,12 @@ manifest:
       url: https://github.com/project-chip/connectedhomeip
       path: modules/connectedhomeip
       # Master pin, not a release: v1.5.x's platform/Zephyr still uses BLE
-      # advertising flags that were removed in Zephyr 4.x. This SHA is the
-      # combination proven against Zephyr v4.3.0 by the hispidin project.
-      revision: 79b07ebe6b1bf6f2da7be6cb6693466351fb5a07
+      # advertising flags that were removed in Zephyr 4.x. Master head as of
+      # 2026-07-01; contains #72415 (WifiManager assert fix, retired our
+      # 0001 patch), #72416 (mbedTLS-4 ecp.h include guard, mandatory for
+      # Zephyr 4.4's TF-PSA-Crypto), #72701/#72698 (deprecated Zephyr API
+      # removal + OTA rework in the zephyr platform/scaffold).
+      revision: 9d45993e3fc0655c51591892a850aef89b10289a
       # CHIP's submodules are managed by its own scripts/checkout_submodules.py
       # (see bootstrap.sh), not by west.
       submodules: false
