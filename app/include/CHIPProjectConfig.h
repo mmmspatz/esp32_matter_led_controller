@@ -33,6 +33,7 @@
 
 #define CHIP_DEVICE_CONFIG_EVENT_LOGGING_UTC_TIMESTAMPS 1
 #define CHIP_DEVICE_CONFIG_EVENT_LOGGING_DEBUG_BUFFER_SIZE (512)
+#define CHIP_DEVICE_CONFIG_EVENT_LOGGING_INFO_BUFFER_SIZE (512)
 #define CHIP_DEVICE_CONFIG_EVENT_LOGGING_CRIT_BUFFER_SIZE (512)
 
 #define CHIP_CONFIG_MRP_LOCAL_ACTIVE_RETRY_INTERVAL (2000_ms32)
@@ -50,5 +51,9 @@
 // Home Assistant + Alexa + a commissioning tool + one spare. The IM and
 // session pools all derive their (spec-8.5.1-compliant) sizes from this.
 #define CHIP_CONFIG_MAX_FABRICS 4
+
+// Group (multicast) messaging peer counters; a standalone light sees at
+// most a couple of group senders per fabric, not the default 15.
+#define CHIP_CONFIG_MAX_GROUP_DATA_PEERS 4
 
 #define CHIP_DEVICE_CONFIG_MAX_EVENT_QUEUE_SIZE 16
