@@ -52,10 +52,15 @@ storage partition: fabrics, WiFi credentials and provisioning survive.
 Production images have no shell (RAM). Once per board:
 
 ```bash
-west build -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=prov.conf && west flash
+west build -d build_prov -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=prov.conf
+west flash -d build_prov
 ./scripts/provision.py --port /dev/ttyUSB0     # writes codes, prints QR
 west build -b btf_wled_esp32/esp32/procpu app && west flash
 ```
+
+The separate `-d build_prov` dir matters: `EXTRA_CONF_FILE` is sticky in
+`CMakeCache.txt` and `auto` pristine ignores conf-file changes, so reusing
+the default `build/` silently rebuilds prov.
 
 Codes live in the `chip-fct` settings namespace: read by the
 commissionable-data provider before the test-code fallback
