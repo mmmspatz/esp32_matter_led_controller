@@ -2,6 +2,7 @@
 
 #include "AppTask.h"
 
+#include <app-common/zap-generated/attributes/Accessors.h>
 #include <app/server/Server.h>
 #include <platform/CHIPDeviceLayer.h>
 
@@ -91,7 +92,39 @@ void AppTask::PreInitMatterStack()
 
 void AppTask::PostInitMatterServerInstance()
 {
-    LOG_INF("LED controller ready");
+    /* OnOff/Level/ColorTemp persist across reboot and are restored by the
+     * cluster servers WITHOUT firing attribute-change callbacks (and a
+     * command that doesn't change an attribute never fires one either).
+     * Prime LightingManager from live cluster state so its cache can't
+     * start out disagreeing with the data model.
+     */
+    using namespace chip::app::Clusters;
+    constexpr chip::EndpointId kLight = 1;
+
+    auto & lighting = LightingManager::Instance();
+
+    chip::app::DataModel::Nullable<uint8_t> level;
+    if (LevelControl::Attributes::CurrentLevel::Get(kLight, level) ==
+            chip::Protocols::InteractionModel::Status::Success &&
+        !level.IsNull())
+    {
+        lighting.SetLevel(level.Value());
+    }
+
+    uint16_t mireds;
+    if (ColorControl::Attributes::ColorTemperatureMireds::Get(kLight, &mireds) ==
+        chip::Protocols::InteractionModel::Status::Success)
+    {
+        lighting.SetColorTempMireds(mireds);
+    }
+
+    bool isOn = false;
+    if (OnOff::Attributes::OnOff::Get(kLight, &isOn) == chip::Protocols::InteractionModel::Status::Success)
+    {
+        lighting.SetOnOff(isOn);
+    }
+
+    LOG_INF("LED controller ready (on=%d)", isOn);
 }
 
 AppTask & AppTask::GetDefaultInstance()
