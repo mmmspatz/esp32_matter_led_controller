@@ -21,14 +21,18 @@ lives in CHIP's CIPD environment. Host python must be ≥3.12 (pyenv local
 is set); CHIP's pigweed env pip-solve fails under 3.10.
 
 Version pins (manifest/west.yml) — do not bump casually:
-- **Zephyr v4.3.0**: last release with monolithic mbedTLS 3.x. The 4.4
-  upgrade path (PSA backend) is mapped in `docs/zephyr-4.4-upgrade-notes.md`.
-- **CHIP master SHA 79b07ebe6b** (not a release: v1.5.x's
-  `platform/Zephyr` uses BLE flags removed in Zephyr 4.x).
+- **Zephyr v4.4.1**: mbedTLS 4.x + TF-PSA-Crypto split; CHIP runs on
+  its PSA crypto backend (`CONFIG_CHIP_CRYPTO_PSA`, SPAKE2+ on the
+  mbedTLS fallback). Upgrade log: `docs/zephyr-4.4-upgrade-notes.md`.
+  Zephyr SDK 1.0.1 (new versioning; `west sdk install` handles it).
+- **CHIP master SHA 9d45993e3f** (2026-07-01; not a release: v1.5.x's
+  `platform/Zephyr` uses BLE flags removed in Zephyr 4.x. This pin has
+  the mbedTLS-4 include guards, #72416).
 - `chip-patches/*.patch` are re-applied by bootstrap after every
-  `west update`. Current set: 0001 missing `<cassert>` (fixed upstream
-  2026-06-05; delete when re-pinning), 0002 `__noinit` heap placement
-  (ESP32-specific, load-bearing).
+  `west update`. Current set: 0002 `__noinit` heap placement
+  (ESP32-specific, load-bearing), 0003 NXP Kconfig.defaults legacy
+  mbedTLS symbols (fatal typeless defaults under 4.4), 0004 skip
+  add_entropy_source under CHIP_CRYPTO_PSA (boot fails 0x6C without).
 
 ## Build / flash / monitor
 
@@ -102,7 +106,9 @@ static allocation matters. Standing arrangements:
 - Kernel pool floor lowered by re-defaulting the radios' promptless
   `HEAP_MEM_POOL_ADD_SIZE_*` in app/Kconfig (parsed first, first default
   wins). Measured radio peak ~42K; pool ≈ 43.8K. Re-measure on any
-  Zephyr/hal bump.
+  Zephyr/hal bump. (4.4 raised the WiFi default to 51200; our 24576
+  survived the commissioning/operation smoke test but has not been
+  re-soaked under WiFi+BLE coex on the new blobs.)
 - IM/session pools scale from `CHIP_CONFIG_MAX_FABRICS 4` (spec floor —
   don't hand-trim the pools).
 - When dram0 overflows: force the link with `-Wl,--noinhibit-exec`, then
@@ -120,7 +126,11 @@ static allocation matters. Standing arrangements:
   `NET_L2_OPENTHREAD=n`, `CHIP_OTA_REQUESTOR=n`, `NET_IPV6_NBR_CACHE=y`
   (its `n` breaks CHIP's own WiFi router solicitation at link time).
 - Do not rsource CHIP's `Kconfig.mbedtls` (deprecated symbols → fatal);
-  the needed feature set lives in prj.conf with current names.
+  the crypto feature set arrives via `CHIP_CRYPTO_PSA` implies plus a
+  few explicit PSA_WANT/MBEDTLS symbols in prj.conf. `MBEDTLS_MD_C=y`
+  is load-bearing (SPAKE2+ mbedTLS fallback links against it).
+- `MBEDTLS_PSA_KEY_SLOT_COUNT` is 32, not the NXP-default 64: the slot
+  table is dram0 .bss (~40 B/slot) and 64 overflows the bank.
 - The cluster servers restore persisted state and process no-op commands
   WITHOUT firing attribute callbacks: any state cache (LightingManager)
   must be primed from cluster reads at server start, or you get SUCCESS
