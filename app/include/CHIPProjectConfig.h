@@ -17,14 +17,14 @@
 #endif
 
 #ifdef __ZEPHYR__
-#define CHIP_DEVICE_CONFIG_CHIP_TASK_NAME "Matter"
+#define CHIP_DEVICE_CONFIG_CHIP_TASK_NAME     "Matter"
 #define CHIP_DEVICE_CONFIG_CHIP_TASK_PRIORITY (K_PRIO_PREEMPT(10))
 #endif
 
 #define CHIP_CONFIG_SECURITY_TEST_MODE 0
 
 // Test vendor ID; required while the device presents the example DAC.
-#define CHIP_DEVICE_CONFIG_DEVICE_VENDOR_ID 0xFFF1
+#define CHIP_DEVICE_CONFIG_DEVICE_VENDOR_ID  0xFFF1
 #define CHIP_DEVICE_CONFIG_DEVICE_PRODUCT_ID 0x8005
 
 // Follows CONFIG_BT so the BT-less provisioning image builds (prov.conf).
@@ -36,7 +36,7 @@
 
 #define CHIP_DEVICE_CONFIG_TEST_SERIAL_NUMBER "TEST_SN"
 
-#define CHIP_DEVICE_CONFIG_EVENT_LOGGING_UTC_TIMESTAMPS 1
+#define CHIP_DEVICE_CONFIG_EVENT_LOGGING_UTC_TIMESTAMPS   1
 // DEBUG/INFO event buffers already default to 512; CRIT defaults to 1024.
 #define CHIP_DEVICE_CONFIG_EVENT_LOGGING_CRIT_BUFFER_SIZE (512)
 

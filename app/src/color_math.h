@@ -34,8 +34,8 @@ float cm_cie1931_brightness(uint8_t level);
  * The two outputs are linear channel weights in 0.0..1.0 that sum to 1.0;
  * scale them by brightness to get PWM duty.
  */
-void cm_ct_mix(uint16_t mireds, uint16_t mireds_cool, uint16_t mireds_warm,
-	       float *warm, float *cool);
+void cm_ct_mix(uint16_t mireds, uint16_t mireds_cool, uint16_t mireds_warm, float *warm,
+	       float *cool);
 
 /*
  * ColorControl color conversions for a 3-channel RGB strip, at full

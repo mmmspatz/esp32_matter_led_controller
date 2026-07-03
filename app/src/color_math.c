@@ -28,8 +28,8 @@ float cm_cie1931_brightness(uint8_t level)
 	return t * t * t;
 }
 
-void cm_ct_mix(uint16_t mireds, uint16_t mireds_cool, uint16_t mireds_warm,
-	       float *warm, float *cool)
+void cm_ct_mix(uint16_t mireds, uint16_t mireds_cool, uint16_t mireds_warm, float *warm,
+	       float *cool)
 {
 	if (mireds < mireds_cool) {
 		mireds = mireds_cool;
@@ -39,8 +39,7 @@ void cm_ct_mix(uint16_t mireds, uint16_t mireds_cool, uint16_t mireds_warm,
 	}
 
 	/* Linear blend in mired space between the two strip endpoints. */
-	float f = ((float)mireds - (float)mireds_cool) /
-		  ((float)mireds_warm - (float)mireds_cool);
+	float f = ((float)mireds - (float)mireds_cool) / ((float)mireds_warm - (float)mireds_cool);
 
 	*warm = f;
 	*cool = 1.0f - f;
@@ -91,13 +90,12 @@ cm_rgb_t cm_hsv_to_rgb(uint8_t hue, uint8_t sat)
 
 static float srgb_gamma(float c)
 {
-	return c <= 0.00304f ? 12.92f * c
-			     : 1.055f * powf(c, 1.0f / 2.4f) - 0.055f;
+	return c <= 0.00304f ? 12.92f * c : 1.055f * powf(c, 1.0f / 2.4f) - 0.055f;
 }
 
 cm_rgb_t cm_xy_to_rgb(uint16_t current_x, uint16_t current_y)
 {
-	cm_rgb_t rgb = { 0, 0, 0 };
+	cm_rgb_t rgb = {0, 0, 0};
 
 	/* CIE xyY -> XYZ at full luminance (Y=1), D65. */
 	float x = (float)current_x / 65535.0f;

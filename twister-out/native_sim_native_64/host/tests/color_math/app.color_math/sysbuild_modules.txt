@@ -1,0 +1,1 @@
+"mcuboot":"/home/mspatz/code/esp32_matter_led_controller/bootloader/mcuboot":"/home/mspatz/code/esp32_matter_led_controller/bootloader/mcuboot/boot/zephyr/sysbuild"

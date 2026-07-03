@@ -30,47 +30,42 @@ static struct gpio_callback sButton0CbData;
 static struct k_work_delayable sFactoryResetWarningWork;
 static struct k_work_delayable sFactoryResetTriggerWork;
 
-static void FactoryResetWarningWorkHandler(struct k_work * work)
+static void FactoryResetWarningWorkHandler(struct k_work *work)
 {
-    LOG_INF("Keep holding to factory reset in 3 seconds. Release to cancel.");
+	LOG_INF("Keep holding to factory reset in 3 seconds. Release to cancel.");
 }
 
-static void FactoryResetTriggerWorkHandler(struct k_work * work)
+static void FactoryResetTriggerWorkHandler(struct k_work *work)
 {
-    LOG_INF("Factory reset triggered");
-    chip::Server::GetInstance().ScheduleFactoryReset();
+	LOG_INF("Factory reset triggered");
+	chip::Server::GetInstance().ScheduleFactoryReset();
 }
 
-static void Button0Handler(const struct device * dev, struct gpio_callback * cb, uint32_t pins)
+static void Button0Handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
-    if (gpio_pin_get_dt(&sButton0) > 0)
-    {
-        k_work_schedule(&sFactoryResetWarningWork, K_SECONDS(2));
-        k_work_schedule(&sFactoryResetTriggerWork, K_SECONDS(5));
-    }
-    else
-    {
-        if (k_work_cancel_delayable(&sFactoryResetTriggerWork) != 0)
-        {
-            LOG_INF("Factory reset canceled");
-        }
-        k_work_cancel_delayable(&sFactoryResetWarningWork);
-    }
+	if (gpio_pin_get_dt(&sButton0) > 0) {
+		k_work_schedule(&sFactoryResetWarningWork, K_SECONDS(2));
+		k_work_schedule(&sFactoryResetTriggerWork, K_SECONDS(5));
+	} else {
+		if (k_work_cancel_delayable(&sFactoryResetTriggerWork) != 0) {
+			LOG_INF("Factory reset canceled");
+		}
+		k_work_cancel_delayable(&sFactoryResetWarningWork);
+	}
 }
 
 static void ButtonInit()
 {
-    if (!gpio_is_ready_dt(&sButton0))
-    {
-        LOG_ERR("Button device not ready");
-        return;
-    }
-    gpio_pin_configure_dt(&sButton0, GPIO_INPUT);
-    gpio_pin_interrupt_configure_dt(&sButton0, GPIO_INT_EDGE_BOTH);
-    gpio_init_callback(&sButton0CbData, Button0Handler, BIT(sButton0.pin));
-    gpio_add_callback(sButton0.port, &sButton0CbData);
-    k_work_init_delayable(&sFactoryResetWarningWork, FactoryResetWarningWorkHandler);
-    k_work_init_delayable(&sFactoryResetTriggerWork, FactoryResetTriggerWorkHandler);
+	if (!gpio_is_ready_dt(&sButton0)) {
+		LOG_ERR("Button device not ready");
+		return;
+	}
+	gpio_pin_configure_dt(&sButton0, GPIO_INPUT);
+	gpio_pin_interrupt_configure_dt(&sButton0, GPIO_INT_EDGE_BOTH);
+	gpio_init_callback(&sButton0CbData, Button0Handler, BIT(sButton0.pin));
+	gpio_add_callback(sButton0.port, &sButton0CbData);
+	k_work_init_delayable(&sFactoryResetWarningWork, FactoryResetWarningWorkHandler);
+	k_work_init_delayable(&sFactoryResetTriggerWork, FactoryResetTriggerWorkHandler);
 }
 #endif /* DT_NODE_EXISTS(DT_ALIAS(sw0)) */
 
@@ -80,60 +75,58 @@ static void ButtonInit()
 
 void AppTask::PreInitMatterStack()
 {
-    /* MOSFET gates float at reset; drive every channel off before anything
-     * else runs.
-     */
-    LightingManager::Instance().Init();
+	/* MOSFET gates float at reset; drive every channel off before anything
+	 * else runs.
+	 */
+	LightingManager::Instance().Init();
 
 #ifdef HAS_BUTTON0
-    ButtonInit();
+	ButtonInit();
 #endif
 }
 
 void AppTask::PostInitMatterServerInstance()
 {
-    /* OnOff/Level/ColorTemp persist across reboot and are restored by the
-     * cluster servers WITHOUT firing attribute-change callbacks (and a
-     * command that doesn't change an attribute never fires one either).
-     * Prime LightingManager from live cluster state so its cache can't
-     * start out disagreeing with the data model.
-     */
-    using namespace chip::app::Clusters;
-    constexpr chip::EndpointId kLight = 1;
+	/* OnOff/Level/ColorTemp persist across reboot and are restored by the
+	 * cluster servers WITHOUT firing attribute-change callbacks (and a
+	 * command that doesn't change an attribute never fires one either).
+	 * Prime LightingManager from live cluster state so its cache can't
+	 * start out disagreeing with the data model.
+	 */
+	using namespace chip::app::Clusters;
+	constexpr chip::EndpointId kLight = 1;
 
-    auto & lighting = LightingManager::Instance();
+	auto &lighting = LightingManager::Instance();
 
-    chip::app::DataModel::Nullable<uint8_t> level;
-    if (LevelControl::Attributes::CurrentLevel::Get(kLight, level) ==
-            chip::Protocols::InteractionModel::Status::Success &&
-        !level.IsNull())
-    {
-        lighting.SetLevel(level.Value());
-    }
+	chip::app::DataModel::Nullable<uint8_t> level;
+	if (LevelControl::Attributes::CurrentLevel::Get(kLight, level) ==
+		    chip::Protocols::InteractionModel::Status::Success &&
+	    !level.IsNull()) {
+		lighting.SetLevel(level.Value());
+	}
 
-    uint16_t mireds;
-    if (ColorControl::Attributes::ColorTemperatureMireds::Get(kLight, &mireds) ==
-        chip::Protocols::InteractionModel::Status::Success)
-    {
-        lighting.SetColorTempMireds(mireds);
-    }
+	uint16_t mireds;
+	if (ColorControl::Attributes::ColorTemperatureMireds::Get(kLight, &mireds) ==
+	    chip::Protocols::InteractionModel::Status::Success) {
+		lighting.SetColorTempMireds(mireds);
+	}
 
-    bool isOn = false;
-    if (OnOff::Attributes::OnOff::Get(kLight, &isOn) == chip::Protocols::InteractionModel::Status::Success)
-    {
-        lighting.SetOnOff(isOn);
-    }
+	bool isOn = false;
+	if (OnOff::Attributes::OnOff::Get(kLight, &isOn) ==
+	    chip::Protocols::InteractionModel::Status::Success) {
+		lighting.SetOnOff(isOn);
+	}
 
-    LOG_INF("LED controller ready (on=%d)", isOn);
+	LOG_INF("LED controller ready (on=%d)", isOn);
 }
 
-AppTask & AppTask::GetDefaultInstance()
+AppTask &AppTask::GetDefaultInstance()
 {
-    return sAppTask;
+	return sAppTask;
 }
 
 /* Declared in AppTaskBase.h; the scaffold's main() enters through this. */
-chip::Zephyr::App::AppTaskBase & chip::Zephyr::App::GetAppTask()
+chip::Zephyr::App::AppTaskBase &chip::Zephyr::App::GetAppTask()
 {
-    return AppTask::GetDefaultInstance();
+	return AppTask::GetDefaultInstance();
 }

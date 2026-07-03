@@ -1,0 +1,20 @@
+<testsuites>
+	<testsuite name="app.color_math" time="0.01" timestamp="2026-07-03T16:30:48.051811" tests="11" failures="0" errors="0" skipped="0">
+		<properties>
+			<property name="version" value="v4.3.0" />
+			<property name="platform" value="native_sim/native/64" />
+			<property name="architecture" value="posix" />
+		</properties>
+		<testcase classname="app.color_math" name="color_math.ct_to_rgb_warm_vs_cool" time="0.00" />
+		<testcase classname="app.color_math" name="color_math.xy_degenerate_y_zero" time="0.00" />
+		<testcase classname="app.color_math" name="color_math.xy_known_points" time="0.00" />
+		<testcase classname="app.color_math" name="color_math.hsv_zero_saturation_is_white" time="0.00" />
+		<testcase classname="app.color_math" name="color_math.hsv_primaries" time="0.00" />
+		<testcase classname="app.color_math" name="color_math.ct_mix_sums_to_one" time="0.00" />
+		<testcase classname="app.color_math" name="color_math.ct_mix_clamps_out_of_range" time="0.00" />
+		<testcase classname="app.color_math" name="color_math.ct_mix_endpoints" time="0.00" />
+		<testcase classname="app.color_math" name="color_math.cie1931_perceptual_midpoint" time="0.00" />
+		<testcase classname="app.color_math" name="color_math.cie1931_monotonic" time="0.00" />
+		<testcase classname="app.color_math" name="color_math.cie1931_endpoints" time="0.00" />
+	</testsuite>
+</testsuites>

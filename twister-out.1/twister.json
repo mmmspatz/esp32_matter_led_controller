@@ -1,0 +1,107 @@
+{
+    "environment":{
+        "os":"Linux",
+        "zephyr_version":"v4.3.0",
+        "toolchain":"zephyr",
+        "commit_date":"2025-11-13T17:35:08+02:00",
+        "run_date":"2026-07-03T20:30:01+00:00",
+        "options":{
+            "help":null,
+            "zephyr_base":null,
+            "quiet":0,
+            "command":"twister",
+            "testsuite_root":[
+                "tests"
+            ],
+            "platform":[
+                "native_sim"
+            ],
+            "inline_logs":true
+        }
+    },
+    "testsuites":[
+        {
+            "name":"app.color_math",
+            "arch":"posix",
+            "platform":"native_sim/native",
+            "path":"../tests/color_math",
+            "run_id":"932ea67019cab79710dea4da4d39bf92",
+            "runnable":true,
+            "retries":0,
+            "toolchain":"host",
+            "status":"error",
+            "log":"Loading Zephyr default modules (Zephyr base).\n-- Application: /home/mspatz/code/esp32_matter_led_controller/tests/color_math\n-- CMake version: 3.31.2\n-- Found Python3: /home/mspatz/code/esp32_matter_led_controller/.venv-zephyr/bin/python3 (found suitable version \"3.12.10\", minimum required is \"3.10\") found components: Interpreter\n-- Cache files will be written to: /home/mspatz/.cache/zephyr\n-- Zephyr version: 4.3.0 (/home/mspatz/code/esp32_matter_led_controller/zephyr)\n-- Found west (found suitable version \"1.5.0\", minimum required is \"0.14.0\")\n-- Board: native_sim, qualifiers: native\n-- Found toolchain: host (gcc/ld)\n-- Could NOT find Dtc (missing: DTC) (Required is at least version \"1.4.6\")\nHint: The project() command has not yet been called.  It sets up system-specific search paths.\n-- Found BOARD.dts: /home/mspatz/code/esp32_matter_led_controller/zephyr/boards/native/native_sim/native_sim.dts\n-- Generated zephyr.dts: /home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native/host/tests/color_math/app.color_math/zephyr/zephyr.dts\n-- Generated pickled edt: /home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native/host/tests/color_math/app.color_math/zephyr/edt.pickle\n-- Generated devicetree_generated.h: /home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native/host/tests/color_math/app.color_math/zephyr/include/generated/zephyr/devicetree_generated.h\nParsing /home/mspatz/code/esp32_matter_led_controller/zephyr/Kconfig\nLoaded configuration '/home/mspatz/code/esp32_matter_led_controller/zephyr/boards/native/native_sim/native_sim_defconfig'\nMerged configuration '/home/mspatz/code/esp32_matter_led_controller/tests/color_math/prj.conf'\nMerged configuration '/home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native/host/tests/color_math/app.color_math/zephyr/misc/generated/extra_kconfig_options.conf'\nConfiguration saved to '/home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native/host/tests/color_math/app.color_math/zephyr/.config'\nKconfig header saved to '/home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native/host/tests/color_math/app.color_math/zephyr/include/generated/zephyr/autoconf.h'\n-- Found GnuLd: /usr/bin/ld.bfd (found version \"2.38\")\n-- The C compiler identification is GNU 11.4.0\n-- The CXX compiler identification is GNU 11.4.0\n-- The ASM compiler identification is GNU\n-- Found assembler: /usr/bin/gcc\n-- Found gen_kobject_list: /home/mspatz/code/esp32_matter_led_controller/zephyr/scripts/build/gen_kobject_list.py\n-- Configuring done (6.6s)\n-- Generating done (0.1s)\nCMake Warning:\n  Manually-specified variables were not used by the project:\n\n    TC_NAME\n\n\n-- Build files have been written to: /home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native/host/tests/color_math/app.color_math\nninja: warning: Unsupported MAKEFLAGS value: Pipe-based protocol is not supported! [ -j16 --jobserver-auth=7,8]\n[1/105] Preparing syscall dependency handling\n\n[2/105] Generating include/generated/zephyr/version.h\n-- Zephyr version: 4.3.0 (/home/mspatz/code/esp32_matter_led_controller/zephyr), build: v4.3.0\n[3/105] Generating misc/generated/syscalls_subdirs.trigger\n[4/105] Generating misc/generated/syscalls.json, misc/generated/struct_tags.json\n[5/105] Generating include/generated/device-api-sections.ld, include/generated/device-api-sections.cmake\n[6/105] Generating include/generated/zephyr/syscall_dispatch.c, include/generated/zephyr/syscall_exports_llext.c, syscall_weakdefs_llext.c, include/generated/zephyr/syscall_list.h\n[7/105] Generating include/generated/zephyr/driver-validation.h\n[8/105] Generating include/generated/zephyr/kobj-types-enum.h, include/generated/zephyr/otype-to-str.h, include/generated/zephyr/otype-to-size.h\n[9/105] Building C object zephyr/CMakeFiles/offsets.dir/arch/posix/core/offsets/offsets.c.obj\nFAILED: [code=1] zephyr/CMakeFiles/offsets.dir/arch/posix/core/offsets/offsets.c.obj \n/usr/bin/gcc -DKERNEL -DK_HEAP_MEM_POOL_SIZE=0 -DTC_RUNID=932ea67019cab79710dea4da4d39bf92 -DZVFS_OPEN_SIZE=0 -D__ZEPHYR__=1 -I/home/mspatz/code/esp32_matter_led_controller/zephyr/kernel/include -I/home/mspatz/code/esp32_matter_led_controller/zephyr/arch/posix/include -I/home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native/host/tests/color_math/app.color_math/zephyr/include/generated/zephyr -I/home/mspatz/code/esp32_matter_led_controller/zephyr/include -I/home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native/host/tests/color_math/app.color_math/zephyr/include/generated -I/home/mspatz/code/esp32_matter_led_controller/zephyr/soc/native/inf_clock -I/home/mspatz/code/esp32_matter_led_controller/zephyr/boards/native/native_sim -I/home/mspatz/code/esp32_matter_led_controller/zephyr/lib/midi2/. -I/home/mspatz/code/esp32_matter_led_controller/zephyr/scripts/native_simulator/common/src/include -I/home/mspatz/code/esp32_matter_led_controller/zephyr/scripts/native_simulator/native/src/include -I/home/mspatz/code/esp32_matter_led_controller/zephyr/subsys/testsuite/include -I/home/mspatz/code/esp32_matter_led_controller/zephyr/subsys/testsuite/coverage -I/home/mspatz/code/esp32_matter_led_controller/zephyr/subsys/testsuite/ztest/include -fno-strict-aliasing -Werror -Os -imacros /home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native/host/tests/color_math/app.color_math/zephyr/include/generated/zephyr/autoconf.h -fno-common -g -gdwarf-4 -fdiagnostics-color=always -Wall -Wformat -Wformat-security -Wno-format-zero-length -Wdouble-promotion -Wno-pointer-sign -Wpointer-arith -Wexpansion-to-defined -Wno-unused-but-set-variable -Werror=implicit-int -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-reorder-functions --param=min-pagesize=0 -fno-defer-pop -fmacro-prefix-map=/home/mspatz/code/esp32_matter_led_controller/tests/color_math=CMAKE_SOURCE_DIR -fmacro-prefix-map=/home/mspatz/code/esp32_matter_led_controller/zephyr=ZEPHYR_BASE -fmacro-prefix-map=/home/mspatz/code/esp32_matter_led_controller=WEST_TOPDIR -ffunction-sections -fdata-sections -m32 -msse2 -mfpmath=sse -fvisibility=hidden -fno-freestanding -std=c11 -fno-lto -MD -MT zephyr/CMakeFiles/offsets.dir/arch/posix/core/offsets/offsets.c.obj -MF zephyr/CMakeFiles/offsets.dir/arch/posix/core/offsets/offsets.c.obj.d -o zephyr/CMakeFiles/offsets.dir/arch/posix/core/offsets/offsets.c.obj -c /home/mspatz/code/esp32_matter_led_controller/zephyr/arch/posix/core/offsets/offsets.c\nIn file included from /usr/lib/gcc/x86_64-linux-gnu/11/include/stdint.h:9,\n                 from /home/mspatz/code/esp32_matter_led_controller/zephyr/include/zephyr/types.h:11,\n                 from /home/mspatz/code/esp32_matter_led_controller/zephyr/include/zephyr/kernel_includes.h:21,\n                 from /home/mspatz/code/esp32_matter_led_controller/zephyr/include/zephyr/kernel.h:17,\n                 from /home/mspatz/code/esp32_matter_led_controller/zephyr/arch/posix/core/offsets/offsets.c:26:\n/usr/include/stdint.h:26:10: fatal error: bits/libc-header-start.h: No such file or directory\n   26 | #include <bits/libc-header-start.h>\n      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~\ncompilation terminated.\nninja: build stopped: subcommand failed.\n",
+            "reason":"Build failure - error: bits/libc-header-start.h: No such file or directory",
+            "execution_time":"0.00",
+            "build_time":"7.27",
+            "testcases":[
+                {
+                    "identifier":"color_math.xy_degenerate_y_zero",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                },
+                {
+                    "identifier":"color_math.ct_mix_clamps_out_of_range",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                },
+                {
+                    "identifier":"color_math.hsv_primaries",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                },
+                {
+                    "identifier":"color_math.ct_mix_sums_to_one",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                },
+                {
+                    "identifier":"color_math.hsv_zero_saturation_is_white",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                },
+                {
+                    "identifier":"color_math.ct_mix_endpoints",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                },
+                {
+                    "identifier":"color_math.xy_known_points",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                },
+                {
+                    "identifier":"color_math.cie1931_endpoints",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                },
+                {
+                    "identifier":"color_math.cie1931_perceptual_midpoint",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                },
+                {
+                    "identifier":"color_math.ct_to_rgb_warm_vs_cool",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                },
+                {
+                    "identifier":"color_math.cie1931_monotonic",
+                    "execution_time":"0.00",
+                    "status":"blocked",
+                    "reason":"Build failure"
+                }
+            ]
+        }
+    ]
+}

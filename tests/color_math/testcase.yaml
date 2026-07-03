@@ -1,6 +1,6 @@
 tests:
   app.color_math:
     platform_allow:
-      - native_sim
+      - native_sim/native/64
     tags:
       - color_math

@@ -1,0 +1,36 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  color-math:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache Zephyr checkout
+        uses: actions/cache@v4
+        with:
+          path: |
+            zephyr
+            modules
+            .west
+          key: tests-west-${{ hashFiles('manifest/west.yml') }}
+
+      # native_sim unit tests need Zephyr itself, none of the Matter stack.
+      - name: Minimal west workspace
+        run: |
+          pip install --quiet west
+          [ -d .west ] || west init -l manifest
+          west update zephyr picolibc
+          pip install --quiet -r zephyr/scripts/requirements-base.txt
+
+      - name: Run twister
+        run: west twister -p native_sim/native/64 -T tests -v --inline-logs

@@ -1,9 +1,10 @@
 # AGENTS.md
 
-Matter-over-WiFi LED strip controller: ESP32-WROOM-32E under **Zephyr** with
-connectedhomeip's **generic Zephyr platform** (`src/platform/Zephyr`) — not
-the official ESP-IDF Matter path. This combination has no upstream prior
-art; expect to be the first one hitting any given integration bug.
+Matter-over-WiFi LED strip controller: ESP32-WROOM-32E under **Zephyr**
+with connectedhomeip's **generic Zephyr platform** (`src/platform/Zephyr`)
+— not the official ESP-IDF Matter path. To our knowledge the first working
+instance of that combination; when something breaks, assume no prior art
+and read the source.
 
 ## Workspace
 
@@ -11,88 +12,152 @@ T2 west topology: this repo is the manifest repo; `west update` populates
 `zephyr/` and `modules/` in-tree (gitignored).
 
 ```bash
-./bootstrap.sh          # once: west workspace, SDK, blobs, CHIP env
+./bootstrap.sh          # once: west workspace, SDK, blobs, CHIP env, chip-patches
 source activate.sh      # every shell: CHIP env (gn/ninja/zap) + venv
 ```
 
-Builds REQUIRE `source activate.sh` first — CHIP is compiled by GN, and gn
-lives in CHIP's CIPD environment, not on the system PATH.
+Builds REQUIRE `source activate.sh` — CHIP is compiled by GN, and gn
+lives in CHIP's CIPD environment. Host python must be ≥3.12 (pyenv local
+is set); CHIP's pigweed env pip-solve fails under 3.10.
 
 Version pins (manifest/west.yml) — do not bump casually:
-- **Zephyr v4.3.0**: last release with monolithic mbedTLS 3.x. v4.4 split
-  it into mbedtls 4.x + tf-psa-crypto, which CHIP's legacy-mbedTLS crypto
-  backend cannot build against. The 4.4 upgrade path is via
-  `CONFIG_CHIP_CRYPTO_PSA` + CHIP master ≥ PR #43762 (untested on Zephyr).
-- **CHIP master SHA 79b07ebe6b** (not a release!): v1.5.x's
-  `platform/Zephyr/BLEManagerImpl.cpp` uses `BT_LE_ADV_OPT_CONNECTABLE`,
-  removed in Zephyr 4.x. This SHA is proven against v4.3.0 (see
-  `~/code/hispidin/docs/matter-bringup-postmortem.md`, the bringup playbook
-  this project follows).
-- Local CHIP patches live in `chip-patches/*.patch`, re-applied by
-  bootstrap.sh after every `west update` (which resets the module).
+- **Zephyr v4.3.0**: last release with monolithic mbedTLS 3.x. The 4.4
+  upgrade path (PSA backend) is mapped in `docs/zephyr-4.4-upgrade-notes.md`.
+- **CHIP master SHA 79b07ebe6b** (not a release: v1.5.x's
+  `platform/Zephyr` uses BLE flags removed in Zephyr 4.x).
+- `chip-patches/*.patch` are re-applied by bootstrap after every
+  `west update`. Current set: 0001 missing `<cassert>` (fixed upstream
+  2026-06-05; delete when re-pinning), 0002 `__noinit` heap placement
+  (ESP32-specific, load-bearing).
 
 ## Build / flash / monitor
 
 ```bash
-west build -b btf_wled_esp32/esp32/procpu app                       # CCT (default)
-west build -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=rgb.conf  # RGB
-west flash                          # esptool; add --esp-device /dev/ttyUSB0 if needed
-west espressif monitor              # or any 115200 terminal on ttyUSB0
-west twister -p native_sim -T tests # color math unit tests
+west build -b btf_wled_esp32/esp32/procpu app                                  # CCT (default)
+west build -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=rgb.conf    # RGB variant
+west build -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=prov.conf   # provisioning image
+west flash                            # esptool; board has working DTR/RTS autoboot
+west twister -p native_sim/native/64 -T tests   # color math unit tests
 ```
 
-The BTF board has no DTR/RTS auto-download circuit: if esptool fails to
-sync, hold S1 (BOOT) while plugging in / resetting, then release.
+Serial console: 115200 on /dev/ttyUSB0. Flashing does NOT touch the
+storage partition: fabrics, WiFi credentials and provisioning survive.
 
-## Hardware map
+## Provisioning (per-device pairing codes)
 
-| Function | GPIO | Notes |
-|---|---|---|
-| PWM CH1 | 27 | LEDC ch0; 74HC245 → 80N03 low-side MOSFET |
-| PWM CH2 | 26 | LEDC ch1 |
-| PWM CH3 | 25 | LEDC ch2 |
-| Button S1 | 0 | also the BOOT strap — safe as user button |
-| DAT (digital strips) | 16 | unused |
-| Microphone | 36 | unused |
+Production images have no shell (RAM). Once per board:
 
-WROOM-32E: 4MB flash, **no PSRAM**. Custom partition table
-(`dts/btf/partitions_btf_4M.dtsi`): 1856K app slots, 192K `storage`
-(settings/NVS: Matter fabrics, WiFi creds, provisioning). MVP boots via
-ESP Simple Boot (no MCUboot).
+```bash
+west build -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=prov.conf && west flash
+./scripts/provision.py --port /dev/ttyUSB0     # writes codes, prints QR
+west build -b btf_wled_esp32/esp32/procpu app && west flash
+```
+
+Codes live in the `chip-fct` settings namespace: read by the
+commissionable-data provider before the test-code fallback
+(20202021/0xF00, manual code 34970112332), untouched by factory reset
+(as long as `CONFIG_CHIP_FACTORY_RESET_ERASE_SETTINGS` stays off) and by
+reflashing. Records land in gitignored `devices/`.
 
 ## Architecture
 
-`main` + `AppTask` (CHIP's `examples/platform/silabs/zephyr` scaffold —
-generic despite the path) → Matter cluster attribute writes arrive via
-`MatterPostAttributeChangeCallback` → `DeviceCallbacks` → `LightingManager`
-→ `color_math.c` (pure C, unit-tested) → `led_pwm.c` (the only file that
-knows about LEDC).
+`app/src/scaffold/` (vendored CHIP example scaffold, see below) provides
+main/AppTaskBase/AppTaskZephyr/CHIPDeviceManager/DataModelCallbacks.
+Attribute writes flow: cluster server → `MatterPostAttributeChangeCallback`
+(scaffold DataModelCallbacks) → `DeviceCallbacks` → `LightingManager`
+(cluster state → channel duties; 20ms exponential smoother over the
+clusters' 100ms transition ticks) → `led_pwm` (the only LEDC-aware file).
+`color_math.c` is pure C, unit-tested on native_sim.
 
-CCT vs RGB is a build-time choice (`CONFIG_LEDCTRL_MODE_*`): two ZAP files,
-two device types (0x010C Color Temperature Light / 0x010D Extended Color
-Light). A runtime toggle is deliberately not offered — the Matter device
-type is static in the Descriptor cluster and controllers cache it.
+CCT vs RGB is build-time (`CONFIG_LEDCTRL_MODE_*`): two ZAP files, two
+device types (0x010C / 0x010D). The `.matter` files are codegen inputs,
+not just review artifacts — after editing a `.zap`, regenerate:
+`./modules/connectedhomeip/scripts/tools/zap/generate.py --zcl
+modules/connectedhomeip/src/app/zap-templates/zcl/zcl.json <file>.zap`,
+or the build links stale plugin callbacks.
 
-## Gotchas (hard-won; read before debugging)
+### Hardware map
 
-- **`DataModelCallbacks.cpp` must be in target_sources** or every cluster
-  attribute write silently no-ops (device commissions fine, ignores all
-  commands).
-- **`CONFIG_CHIP_FACTORY_RESET_ERASE_SETTINGS` must stay `n`** — else
-  factory reset nukes the whole settings partition including the `chip-fct`
-  provisioning keys (pairing codes).
-- Zephyr's ESP32 WiFi driver forces `!SMP`: everything runs on one core.
-- The `CONFIG_CHIP_DEVICE_DISCRIMINATOR` / `CHIP_DEVICE_SPAKE2_*` Kconfigs
-  are **inert** on the generic Zephyr platform (only consumed by
-  nrfconnect/telink/nxp). Provisioning goes through Zephyr settings
-  `chip-fct/*` keys instead — see scripts/provision.py.
-- Do not `rsource` CHIP's `Kconfig.mbedtls` (sets a symbol deprecated in
-  Zephyr 4.3 → fatal warning). Its intent is inlined in `app/prj.conf`.
+| Function | GPIO | Notes |
+|---|---|---|
+| PWM CH1 | 27 | LEDC ch0; CCT strip: **cool** white |
+| PWM CH2 | 26 | LEDC ch1; CCT strip: **warm** white |
+| PWM CH3 | 25 | LEDC ch2; unused in CCT mode |
+| Button S1 | 0 | BOOT strap; short=nothing yet, 5s hold=factory reset |
+| DAT / mic | 16 / 36 | unused |
+
+WROOM-32E: 4MB flash, no PSRAM. Custom partitions
+(`dts/btf/partitions_btf_4M.dtsi`): 1856K app slots (OTA-shaped, unused
+slot1), 192K `storage`. ESP Simple Boot, no MCUboot.
+
+## RAM: the defining constraint
+
+Usable DRAM is two banks: **dram0 ≈ 136K** (SRAM2 minus the 56K BT-blob
+reserve) for `.bss`+`.data`, and **dram1 = 96K** (SRAM1) which on this
+port only receives `.noinit`. The build sits at ~99.7% of dram0; every
+static allocation matters. Standing arrangements:
+- All runtime allocation goes through CHIP's sys_heap (40K, `--wrap=malloc`),
+  placed in dram1 via `__noinit` (chip-patches/0002);
+  `CONFIG_COMMON_LIBC_MALLOC=n` because a zero-size libc arena panics at boot.
+- Kernel pool floor lowered by re-defaulting the radios' promptless
+  `HEAP_MEM_POOL_ADD_SIZE_*` in app/Kconfig (parsed first, first default
+  wins). Measured radio peak ~42K; pool ≈ 43.8K. Re-measure on any
+  Zephyr/hal bump.
+- IM/session pools scale from `CHIP_CONFIG_MAX_FABRICS 4` (spec floor —
+  don't hand-trim the pools).
+- When dram0 overflows: force the link with `-Wl,--noinhibit-exec`, then
+  `nm --size-sort` on `zephyr_pre0.elf` and cut what's actually there.
+
+## Gotchas (each cost real debugging time)
+
+- **`DataModelCallbacks.cpp` must be in target_sources** or attribute
+  writes silently no-op.
+- **`CONFIG_CHIP_ENABLE_WIFI_STATION=y`** is mandatory and defaults off:
+  without it the NetworkCommissioning WiFi commands are compiled out of
+  libCHIP and every commissioner fails right after credential install
+  with UNSUPPORTED_COMMAND.
+- chip-module's `Kconfig.defaults` is Thread-biased: we override
+  `NET_L2_OPENTHREAD=n`, `CHIP_OTA_REQUESTOR=n`, `NET_IPV6_NBR_CACHE=y`
+  (its `n` breaks CHIP's own WiFi router solicitation at link time).
+- Do not rsource CHIP's `Kconfig.mbedtls` (deprecated symbols → fatal);
+  the needed feature set lives in prj.conf with current names.
+- The cluster servers restore persisted state and process no-op commands
+  WITHOUT firing attribute callbacks: any state cache (LightingManager)
+  must be primed from cluster reads at server start, or you get SUCCESS
+  responses and a dark strip.
+- Factory reset works but the final reboot panics in hal_espressif
+  (`esp_restart` stops WiFi under `irq_lock`); state is already wiped —
+  power-cycle completes it.
+- picolibc's `srand` chain collides with the WiFi blob's strong
+  `random()`: app-local `rand_shim.c` breaks the chain.
 - Float math only (`powf`, `f` suffixes): `-Werror=double-promotion`.
-- Test certs: Home Assistant accepts them; Google rejects; Alexa TBD.
+- Test certs: Home Assistant accepts; Google rejects; Alexa unverified.
+- HA companion-app commissioning flaked at the last (adoption) step even
+  though the device joined HA's fabric (VID 0x6006) and answered its
+  subscriptions — device side is proven good via chip-tool; debug HA
+  server-side if it recurs.
 
-## Status
+## Local controller (chip-tool)
 
-Milestones: M0 board bring-up → M1 WiFi+BLE coex gate → M2 CHIP-links gate
-→ M3 commissioning → M4 full app → M5 provisioning. See git history for
-current position.
+Built at `build_chiptool/chip-tool` (host build:
+`./scripts/examples/gn_build_example.sh examples/chip-tool build_chiptool
+'chip_support_thread_meshcop=false chip_enable_wifi=false
+chip_enable_thread=false'`; needs gdbus-codegen + extra submodules:
+perfetto, libwebsockets, editline). Recipes:
+
+```bash
+chip-tool pairing ble-wifi 1 "<ssid>" "<psk>" <passcode> <discriminator>
+chip-tool onoff on 1 1
+chip-tool levelcontrol move-to-level 200 5 0 0 1 1
+chip-tool colorcontrol move-to-color-temperature 370 6 0 0 1 1
+chip-tool pairing unpair 1
+```
+
+## Scaffold provenance
+
+`app/src/scaffold/` is CHIP's `examples/platform/silabs/zephyr` (generic
+despite the name), vendored at pin 79b07ebe6b with one fix: the
+NetworkCommissioning instance Init moved into InitServer (Matter thread,
+after Server::Init) — upstream calls it on the app thread before the
+registry exists and discards the error. Re-diff against upstream when
+re-pinning.

@@ -1,0 +1,19 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: clang-format (app sources, scaffold excluded)
+        run: |
+          pip install --quiet clang-format
+          # app/src/scaffold is vendored upstream code; keep its diffability.
+          git ls-files 'app/*.c' 'app/*.h' 'app/*.cpp' \
+            | grep -v '^app/src/scaffold/' \
+            | xargs clang-format --dry-run -Werror

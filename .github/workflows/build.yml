@@ -1,0 +1,73 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  firmware:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache west workspace
+        uses: actions/cache@v4
+        with:
+          path: |
+            zephyr
+            modules
+            .west
+          key: build-west-${{ hashFiles('manifest/west.yml') }}
+
+      - name: Cache CHIP environment (gn/ninja/zap via CIPD)
+        uses: actions/cache@v4
+        with:
+          path: modules/connectedhomeip/.environment
+          key: chip-env-${{ hashFiles('manifest/west.yml') }}
+
+      - name: Cache Zephyr SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/zephyr-sdk-*
+          key: zephyr-sdk-xtensa-esp32-0.17.4
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ github.sha }}
+          restore-keys: ccache-
+
+      - name: Bootstrap
+        run: ./bootstrap.sh
+
+      - name: Build CCT variant
+        run: |
+          source activate.sh
+          west build -p -b btf_wled_esp32/esp32/procpu app
+
+      - name: Build RGB variant
+        run: |
+          source activate.sh
+          west build -p -b btf_wled_esp32/esp32/procpu app -d build_rgb -- -DEXTRA_CONF_FILE=rgb.conf
+
+      - name: Build provisioning variant
+        run: |
+          source activate.sh
+          west build -p -b btf_wled_esp32/esp32/procpu app -d build_prov -- -DEXTRA_CONF_FILE=prov.conf
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: |
+            build/zephyr/zephyr.bin
+            build_rgb/zephyr/zephyr.bin
+            build_prov/zephyr/zephyr.bin

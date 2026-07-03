@@ -1,0 +1,58 @@
+*** Booting Zephyr OS build v4.3.0 ***
+Running TESTSUITE color_math
+===================================================================
+START - test_cie1931_endpoints
+ PASS - test_cie1931_endpoints in 0.000 seconds
+===================================================================
+START - test_cie1931_monotonic
+ PASS - test_cie1931_monotonic in 0.000 seconds
+===================================================================
+START - test_cie1931_perceptual_midpoint
+ PASS - test_cie1931_perceptual_midpoint in 0.000 seconds
+===================================================================
+START - test_ct_mix_clamps_out_of_range
+ PASS - test_ct_mix_clamps_out_of_range in 0.000 seconds
+===================================================================
+START - test_ct_mix_endpoints
+ PASS - test_ct_mix_endpoints in 0.000 seconds
+===================================================================
+START - test_ct_mix_sums_to_one
+ PASS - test_ct_mix_sums_to_one in 0.000 seconds
+===================================================================
+START - test_ct_to_rgb_warm_vs_cool
+ PASS - test_ct_to_rgb_warm_vs_cool in 0.000 seconds
+===================================================================
+START - test_hsv_primaries
+ PASS - test_hsv_primaries in 0.000 seconds
+===================================================================
+START - test_hsv_zero_saturation_is_white
+ PASS - test_hsv_zero_saturation_is_white in 0.000 seconds
+===================================================================
+START - test_xy_degenerate_y_zero
+ PASS - test_xy_degenerate_y_zero in 0.000 seconds
+===================================================================
+START - test_xy_known_points
+ PASS - test_xy_known_points in 0.000 seconds
+===================================================================
+TESTSUITE color_math succeeded
+
+------ TESTSUITE SUMMARY START ------
+
+SUITE PASS - 100.00% [color_math]: pass = 11, fail = 0, skip = 0, total = 11 duration = 0.000 seconds
+ - PASS - [color_math.test_cie1931_endpoints] duration = 0.000 seconds
+ - PASS - [color_math.test_cie1931_monotonic] duration = 0.000 seconds
+ - PASS - [color_math.test_cie1931_perceptual_midpoint] duration = 0.000 seconds
+ - PASS - [color_math.test_ct_mix_clamps_out_of_range] duration = 0.000 seconds
+ - PASS - [color_math.test_ct_mix_endpoints] duration = 0.000 seconds
+ - PASS - [color_math.test_ct_mix_sums_to_one] duration = 0.000 seconds
+ - PASS - [color_math.test_ct_to_rgb_warm_vs_cool] duration = 0.000 seconds
+ - PASS - [color_math.test_hsv_primaries] duration = 0.000 seconds
+ - PASS - [color_math.test_hsv_zero_saturation_is_white] duration = 0.000 seconds
+ - PASS - [color_math.test_xy_degenerate_y_zero] duration = 0.000 seconds
+ - PASS - [color_math.test_xy_known_points] duration = 0.000 seconds
+
+------ TESTSUITE SUMMARY END ------
+
+===================================================================
+RunID: 022bb48b7607eb40f894bc640437dcdd
+PROJECT EXECUTION SUCCESSFUL

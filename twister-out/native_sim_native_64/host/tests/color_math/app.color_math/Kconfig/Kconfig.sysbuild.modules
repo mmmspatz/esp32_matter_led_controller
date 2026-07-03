@@ -1,0 +1,18 @@
+config ZEPHYR_ESP32_MATTER_LED_CONTROLLER_MODULE
+   bool
+   default y
+config ZEPHYR_HAL_ESPRESSIF_MODULE
+   bool
+   default y
+config ZEPHYR_MBEDTLS_MODULE
+   bool
+   default y
+config ZEPHYR_MCUBOOT_MODULE
+   bool
+   default y
+config ZEPHYR_OPENTHREAD_MODULE
+   bool
+   default y
+config ZEPHYR_PICOLIBC_MODULE
+   bool
+   default y

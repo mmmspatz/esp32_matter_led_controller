@@ -1,0 +1,26 @@
+# Available runners configured by board.cmake.
+runners:
+- native
+
+# Default flash runner if --runner is not given.
+flash-runner: native
+
+# Default debug runner if --runner is not given.
+debug-runner: native
+
+# Common runner configuration values.
+config:
+  board_dir: /home/mspatz/code/esp32_matter_led_controller/zephyr/boards/native/native_sim
+  # Build outputs:
+  elf_file: zephyr.elf
+  exe_file: zephyr.exe
+  # Host tools:
+  gdb: /usr/bin/gdb
+  openocd: /home/mspatz/code/esp32_matter_led_controller/modules/connectedhomeip/.environment/cipd/packages/pigweed/bin/openocd
+  openocd_search:
+
+# Runner specific arguments
+args:
+  native:
+    []
+

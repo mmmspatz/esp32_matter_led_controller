@@ -4,15 +4,15 @@
 
 #include "AppTaskZephyr.h"
 
-class AppTask : public chip::Zephyr::App::AppTaskZephyr
+class AppTask: public chip::Zephyr::App::AppTaskZephyr
 {
-public:
-    ~AppTask() override{};
-    void PreInitMatterStack(void) override;
-    void PostInitMatterServerInstance(void) override;
+      public:
+	~AppTask() override {};
+	void PreInitMatterStack(void) override;
+	void PostInitMatterServerInstance(void) override;
 
-    static AppTask & GetDefaultInstance();
+	static AppTask &GetDefaultInstance();
 
-private:
-    static AppTask sAppTask;
+      private:
+	static AppTask sAppTask;
 };

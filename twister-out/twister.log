@@ -1,0 +1,109 @@
+2026-07-03 16:30:46,614 - twister - INFO - Using Ninja..
+2026-07-03 16:30:46,661 - twister - INFO - Zephyr version: v4.3.0
+2026-07-03 16:30:46,664 - twister - DEBUG - Running cmake script /home/mspatz/code/esp32_matter_led_controller/zephyr/cmake/verify-toolchain.cmake
+2026-07-03 16:30:46,664 - twister - DEBUG - Calling cmake: /home/mspatz/.local/bin/cmake -DFORMAT=json -P /home/mspatz/code/esp32_matter_led_controller/zephyr/cmake/verify-toolchain.cmake
+2026-07-03 16:30:46,864 - twister - DEBUG - Finished running /home/mspatz/code/esp32_matter_led_controller/zephyr/cmake/verify-toolchain.cmake
+2026-07-03 16:30:46,865 - twister - INFO - Using 'zephyr' toolchain.
+2026-07-03 16:30:48,048 - twister - DEBUG - Reading testsuite configuration files under /home/mspatz/code/esp32_matter_led_controller/tests...
+2026-07-03 16:30:48,048 - twister - DEBUG - Found possible testsuite in /home/mspatz/code/esp32_matter_led_controller/tests/color_math
+2026-07-03 16:30:48,050 - twister - DEBUG - No duplicates found.
+2026-07-03 16:30:48,051 - twister - DEBUG -  platform filter: ['native_sim/native/64']
+2026-07-03 16:30:48,051 - twister - DEBUG - platform_pattern: []
+2026-07-03 16:30:48,051 - twister - DEBUG -    vendor filter: []
+2026-07-03 16:30:48,051 - twister - DEBUG -      arch_filter: None
+2026-07-03 16:30:48,051 - twister - DEBUG -       tag_filter: None
+2026-07-03 16:30:48,051 - twister - DEBUG -      exclude_tag: None
+2026-07-03 16:30:48,051 - twister - DEBUG - Checking platform filter: ['native_sim/native/64']
+2026-07-03 16:30:48,051 - twister - INFO - Building initial testsuite list...
+2026-07-03 16:30:48,051 - twister - INFO - Writing JSON report /home/mspatz/code/esp32_matter_led_controller/twister-out/testplan.json
+2026-07-03 16:30:48,063 - twister - INFO - JOBS: 16
+2026-07-03 16:30:48,064 - twister - INFO - Adding tasks to the queue...
+2026-07-03 16:30:48,064 - twister - DEBUG - adding native_sim/native/64/host/app.color_math
+2026-07-03 16:30:48,065 - twister - INFO - Added initial list of jobs to queue
+2026-07-03 16:30:48,070 - twister - DEBUG - Running cmake on /home/mspatz/code/esp32_matter_led_controller/tests/color_math for native_sim/native/64
+2026-07-03 16:30:48,070 - twister - DEBUG - Calling cmake: /home/mspatz/.local/bin/cmake -B/home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native_64/host/tests/color_math/app.color_math -DTC_RUNID=022bb48b7607eb40f894bc640437dcdd -DTC_NAME=app.color_math -DCONFIG_COMPILER_WARNINGS_AS_ERRORS=y -DEXTRA_GEN_EDT_ARGS=--edtlib-Werror -GNinja -DPython3_EXECUTABLE=/home/mspatz/code/esp32_matter_led_controller/.venv-zephyr/bin/python3 -DZEPHYR_TOOLCHAIN_VARIANT=host -S/home/mspatz/code/esp32_matter_led_controller/tests/color_math -DBOARD=native_sim/native/64
+2026-07-03 16:30:48,089 - twister - DEBUG - Launched 16 jobs
+2026-07-03 16:30:52,433 - twister - DEBUG - Finished running cmake /home/mspatz/code/esp32_matter_led_controller/tests/color_math for native_sim/native/64 in 4.36 seconds
+2026-07-03 16:30:52,435 - twister - DEBUG - build test: native_sim/native/64/host/app.color_math
+2026-07-03 16:30:52,435 - twister - DEBUG - Building /home/mspatz/code/esp32_matter_led_controller/tests/color_math for native_sim/native/64
+2026-07-03 16:30:52,436 - twister - DEBUG - Running /home/mspatz/.local/bin/cmake --build /home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native_64/host/tests/color_math/app.color_math
+2026-07-03 16:30:54,268 - twister - DEBUG - Finished building /home/mspatz/code/esp32_matter_led_controller/tests/color_math for native_sim/native/64 in 1.83 seconds
+2026-07-03 16:30:54,269 - twister - DEBUG - Determine test cases for test instance: native_sim/native/64/host/app.color_math
+2026-07-03 16:30:54,269 - twister - DEBUG - Determine test cases for test suite: app.color_math
+2026-07-03 16:30:54,320 - twister - DEBUG - Test instance native_sim/native/64/host/app.color_math already has 11 testcase(s) known: [<TestCase color_math.xy_known_points with None>, <TestCase color_math.hsv_primaries with None>, <TestCase color_math.ct_mix_clamps_out_of_range with None>, <TestCase color_math.hsv_zero_saturation_is_white with None>, <TestCase color_math.cie1931_perceptual_midpoint with None>, <TestCase color_math.cie1931_endpoints with None>, <TestCase color_math.xy_degenerate_y_zero with None>, <TestCase color_math.ct_to_rgb_warm_vs_cool with None>, <TestCase color_math.cie1931_monotonic with None>, <TestCase color_math.ct_mix_sums_to_one with None>, <TestCase color_math.ct_mix_endpoints with None>]
+2026-07-03 16:30:54,320 - twister - DEBUG - Detected 11 Ztest case(s): [color_math.ct_to_rgb_warm_vs_cool, color_math.xy_degenerate_y_zero, color_math.xy_known_points, color_math.hsv_zero_saturation_is_white, color_math.hsv_primaries, color_math.ct_mix_sums_to_one, color_math.ct_mix_clamps_out_of_range, color_math.ct_mix_endpoints, color_math.cie1931_perceptual_midpoint, color_math.cie1931_monotonic, color_math.cie1931_endpoints] in /home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native_64/host/tests/color_math/app.color_math/zephyr/zephyr.elf
+2026-07-03 16:30:54,323 - twister - DEBUG - run test: native_sim/native/64/host/app.color_math
+2026-07-03 16:30:54,323 - twister - DEBUG - Reset instance status from 'passed' to None before run.
+2026-07-03 16:30:54,323 - twister - DEBUG - Spawning process: /home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native_64/host/tests/color_math/app.color_math/zephyr/zephyr.exe
+in directory: /home/mspatz/code/esp32_matter_led_controller/twister-out/native_sim_native_64/host/tests/color_math/app.color_math
+2026-07-03 16:30:54,323 - twister - DEBUG - Spawning BinaryHandler Thread for native_sim/native/64/host/app.color_math
+2026-07-03 16:30:54,325 - twister - DEBUG - OUTPUT: *** Booting Zephyr OS build v4.3.0 ***
+2026-07-03 16:30:54,325 - twister - DEBUG - OUTPUT: Running TESTSUITE color_math
+2026-07-03 16:30:54,326 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,326 - twister - DEBUG - OUTPUT: START - test_cie1931_endpoints
+2026-07-03 16:30:54,326 - twister - DEBUG - OUTPUT:  PASS - test_cie1931_endpoints in 0.000 seconds
+2026-07-03 16:30:54,326 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,326 - twister - DEBUG - OUTPUT: START - test_cie1931_monotonic
+2026-07-03 16:30:54,326 - twister - DEBUG - OUTPUT:  PASS - test_cie1931_monotonic in 0.000 seconds
+2026-07-03 16:30:54,326 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,327 - twister - DEBUG - OUTPUT: START - test_cie1931_perceptual_midpoint
+2026-07-03 16:30:54,327 - twister - DEBUG - OUTPUT:  PASS - test_cie1931_perceptual_midpoint in 0.000 seconds
+2026-07-03 16:30:54,327 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,327 - twister - DEBUG - OUTPUT: START - test_ct_mix_clamps_out_of_range
+2026-07-03 16:30:54,327 - twister - DEBUG - OUTPUT:  PASS - test_ct_mix_clamps_out_of_range in 0.000 seconds
+2026-07-03 16:30:54,327 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,327 - twister - DEBUG - OUTPUT: START - test_ct_mix_endpoints
+2026-07-03 16:30:54,327 - twister - DEBUG - OUTPUT:  PASS - test_ct_mix_endpoints in 0.000 seconds
+2026-07-03 16:30:54,327 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,328 - twister - DEBUG - OUTPUT: START - test_ct_mix_sums_to_one
+2026-07-03 16:30:54,328 - twister - DEBUG - OUTPUT:  PASS - test_ct_mix_sums_to_one in 0.000 seconds
+2026-07-03 16:30:54,328 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,328 - twister - DEBUG - OUTPUT: START - test_ct_to_rgb_warm_vs_cool
+2026-07-03 16:30:54,328 - twister - DEBUG - OUTPUT:  PASS - test_ct_to_rgb_warm_vs_cool in 0.000 seconds
+2026-07-03 16:30:54,328 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,328 - twister - DEBUG - OUTPUT: START - test_hsv_primaries
+2026-07-03 16:30:54,328 - twister - DEBUG - OUTPUT:  PASS - test_hsv_primaries in 0.000 seconds
+2026-07-03 16:30:54,328 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,329 - twister - DEBUG - OUTPUT: START - test_hsv_zero_saturation_is_white
+2026-07-03 16:30:54,329 - twister - DEBUG - OUTPUT:  PASS - test_hsv_zero_saturation_is_white in 0.000 seconds
+2026-07-03 16:30:54,329 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,329 - twister - DEBUG - OUTPUT: START - test_xy_degenerate_y_zero
+2026-07-03 16:30:54,329 - twister - DEBUG - OUTPUT:  PASS - test_xy_degenerate_y_zero in 0.000 seconds
+2026-07-03 16:30:54,329 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,329 - twister - DEBUG - OUTPUT: START - test_xy_known_points
+2026-07-03 16:30:54,329 - twister - DEBUG - OUTPUT:  PASS - test_xy_known_points in 0.000 seconds
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT: TESTSUITE color_math succeeded
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT: 
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT: ------ TESTSUITE SUMMARY START ------
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT: 
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT: SUITE PASS - 100.00% [color_math]: pass = 11, fail = 0, skip = 0, total = 11 duration = 0.000 seconds
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_cie1931_endpoints] duration = 0.000 seconds
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_cie1931_monotonic] duration = 0.000 seconds
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_cie1931_perceptual_midpoint] duration = 0.000 seconds
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_ct_mix_clamps_out_of_range] duration = 0.000 seconds
+2026-07-03 16:30:54,330 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_ct_mix_endpoints] duration = 0.000 seconds
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_ct_mix_sums_to_one] duration = 0.000 seconds
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_ct_to_rgb_warm_vs_cool] duration = 0.000 seconds
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_hsv_primaries] duration = 0.000 seconds
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_hsv_zero_saturation_is_white] duration = 0.000 seconds
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_xy_degenerate_y_zero] duration = 0.000 seconds
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT:  - PASS - [color_math.test_xy_known_points] duration = 0.000 seconds
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT: 
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT: ------ TESTSUITE SUMMARY END ------
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT: 
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT: ===================================================================
+2026-07-03 16:30:54,331 - twister - DEBUG - OUTPUT: RunID: 022bb48b7607eb40f894bc640437dcdd
+2026-07-03 16:30:54,332 - twister - DEBUG - OUTPUT: PROJECT EXECUTION SUCCESSFUL
+2026-07-03 16:30:54,332 - twister - DEBUG - Expected suite names:['color_math']
+2026-07-03 16:30:54,332 - twister - DEBUG - Detected suite names:['color_math']
+2026-07-03 16:30:54,332 - twister - DEBUG - run status: native_sim/native/64/host/app.color_math passed
+2026-07-03 16:30:54,338 - twister - INFO - 1 test scenarios (1 configurations) selected, 0 configurations filtered (0 by static filter, 0 at runtime).
+2026-07-03 16:30:54,342 - twister - INFO - [32m1 of 1[39m executed test configurations passed (100.00%), 0 built (not run), 0 failed, 0 errored, with no warnings in 7.73 seconds.
+2026-07-03 16:30:54,342 - twister - INFO - 11 of 11 executed test cases passed (100.00%) on 1 out of total 1260 platforms (0.08%).
+2026-07-03 16:30:54,342 - twister - INFO - [32m1[39m test configurations executed on platforms, [36m0[39m test configurations were only built.
+2026-07-03 16:30:54,342 - twister - INFO - Saving reports...
+2026-07-03 16:30:54,342 - twister - INFO - Writing JSON report /home/mspatz/code/esp32_matter_led_controller/twister-out/twister.json
+2026-07-03 16:30:54,343 - twister - INFO - Writing xunit report /home/mspatz/code/esp32_matter_led_controller/twister-out/twister.xml...
+2026-07-03 16:30:54,343 - twister - INFO - Writing xunit report /home/mspatz/code/esp32_matter_led_controller/twister-out/twister_report.xml...
+2026-07-03 16:30:54,344 - twister - INFO - Run completed
