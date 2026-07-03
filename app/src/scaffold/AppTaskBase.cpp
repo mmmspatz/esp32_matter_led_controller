@@ -289,7 +289,8 @@ CHIP_ERROR chip::Zephyr::App::AppTaskBase::Init()
 #if CONFIG_CHIP_WIFI || CHIP_DEVICE_CONFIG_ENABLE_WPA
     // NetworkCommissioning instance init moved into InitServer: calling it
     // here raced the scheduled InitServer and lost, leaving the cluster
-    // without command handlers (and the error was silently discarded).
+    // without command handlers (upstream now propagates the error instead
+    // of discarding it, but still makes the call on the wrong thread).
 #ifdef ENABLE_CHIP_SHELL
     Shell::SetWiFiDriver(chip::Zephyr::App::GetAppTask().GetWifiDriverInstance());
 #endif
