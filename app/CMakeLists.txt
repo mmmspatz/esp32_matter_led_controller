@@ -10,9 +10,6 @@ list(APPEND ZEPHYR_EXTRA_MODULES ${CHIP_ROOT}/config/zephyr/chip-module)
 
 find_package(Zephyr HINTS $ENV{ZEPHYR_BASE})
 
-# Generic Zephyr app scaffold; lives under a silabs path upstream but every
-# vendor-specific piece is compiled out by our Kconfig.
-get_filename_component(ZEPHYR_PLATFORM_COMMON ${CHIP_ROOT}/examples/platform/silabs/zephyr REALPATH)
 
 # unused-result: the reused example scaffold ignores a nodiscard
 # CHIP_ERROR on the WiFi path; not our code to fix here.
@@ -28,9 +25,12 @@ target_include_directories(app
     PRIVATE
     include
     src
-    ${ZEPHYR_PLATFORM_COMMON}
+    src/scaffold
 )
 
+# src/scaffold is CHIP's examples/platform/silabs/zephyr app scaffold
+# (generic despite the upstream path), vendored so we own its bugfixes —
+# notably NetworkCommissioning registration ordering in AppTaskBase.cpp.
 target_sources(app
     PRIVATE
     src/AppTask.cpp
@@ -39,14 +39,14 @@ target_sources(app
     src/color_math.c
     src/led_pwm.c
     src/rand_shim.c
-    ${ZEPHYR_PLATFORM_COMMON}/main.cpp
-    ${ZEPHYR_PLATFORM_COMMON}/AppTaskBase.cpp
-    ${ZEPHYR_PLATFORM_COMMON}/AppTaskZephyr.cpp
-    ${ZEPHYR_PLATFORM_COMMON}/CHIPDeviceManager.cpp
-    ${ZEPHYR_PLATFORM_COMMON}/CommonDeviceCallbacks.cpp
+    src/scaffold/main.cpp
+    src/scaffold/AppTaskBase.cpp
+    src/scaffold/AppTaskZephyr.cpp
+    src/scaffold/CHIPDeviceManager.cpp
+    src/scaffold/CommonDeviceCallbacks.cpp
     # Without this file cluster attribute writes silently no-op (it defines
     # MatterPostAttributeChangeCallback and routes it to DeviceCallbacks).
-    ${ZEPHYR_PLATFORM_COMMON}/DataModelCallbacks.cpp
+    src/scaffold/DataModelCallbacks.cpp
 )
 
 if(CONFIG_LEDCTRL_MODE_RGB)
