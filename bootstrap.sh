@@ -14,10 +14,13 @@ for arg in "$@"; do
     esac
 done
 
-MIN_PY="3.10"
+# CHIP's pigweed env setup pip-compiles its requirements against the host
+# python; under 3.10 that resolution fails (mobly conflict). 3.12 is proven.
+MIN_PY="3.12"
 HOST_PY=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')
 if [ "$(printf '%s\n%s\n' "$MIN_PY" "$HOST_PY" | sort -V | head -n1)" != "$MIN_PY" ]; then
     echo "error: python3 on PATH is $HOST_PY; need >= $MIN_PY" >&2
+    echo "hint:  pyenv install 3.12 && pyenv local 3.12" >&2
     exit 1
 fi
 
@@ -34,8 +37,11 @@ if [ ! -d .west ]; then
 fi
 west update
 
-pip install --quiet -r zephyr/scripts/requirements-base.txt
 pip install --quiet pytest pyserial ecdsa qrcode
+
+# Zephyr's own requirements.txt (superset of requirements-base.txt) plus
+# per-module python deps (notably esptool from hal_espressif).
+west packages pip --install
 
 pip install --quiet \
     -r modules/connectedhomeip/scripts/setup/requirements.build.txt \
