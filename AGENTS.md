@@ -146,7 +146,12 @@ static allocation matters. Standing arrangements:
 - picolibc's `srand` chain collides with the WiFi blob's strong
   `random()`: app-local `rand_shim.c` breaks the chain.
 - Float math only (`powf`, `f` suffixes): `-Werror=double-promotion`.
-- Test certs: Home Assistant accepts; Google rejects; Alexa unverified.
+- Test certs (this device uses the example DAC + test VID 0xFFF1): HA's
+  Matter Server (matter.js, HA 2026.7+) rejects them under its default
+  production trust policy — commissioning reaches DeviceAttestation then
+  fails. Enable Settings → Apps → Matter Server → Configuration →
+  "Enable test-net DCL usage" to commission. Google rejects; Alexa
+  unverified.
 - HA companion-app commissioning flaked at the last (adoption) step even
   though the device joined HA's fabric (VID 0x6006) and answered its
   subscriptions — device side is proven good via chip-tool; debug HA
