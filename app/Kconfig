@@ -7,11 +7,13 @@
 rsource "../modules/connectedhomeip/config/zephyr/chip-module/Kconfig.defaults"
 
 # The ESP32 WiFi/BT drivers contribute promptless HEAP_MEM_POOL_ADD_SIZE_*
-# defaults (51200 + 25600) that set the floor of the statically-allocated
-# kernel heap — far above measured need (peak ~42K with both radios active
+# defaults (40960 + 25600 on Zephyr 4.3; 4.4 raises WiFi to 51200 citing
+# real allocation failures) that set the floor of the statically-allocated
+# kernel heap — above measured need (peak ~42K with both radios active
 # and trimmed driver buffers). Kconfig takes the first default it sees, and
 # this file is parsed before the driver tree, so re-declaring the symbols
 # here lowers the floor. dram0_0_seg is 136K total; every KB counts.
+# Re-measure before trusting these numbers on a new Zephyr/hal pin.
 config HEAP_MEM_POOL_ADD_SIZE_ESP_WIFI
 	int
 	default 24576
