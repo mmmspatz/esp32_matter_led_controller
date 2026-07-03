@@ -1,0 +1,39 @@
+Fix NetworkCommissioning cluster registration race in the Zephyr app scaffold.
+
+sNetworkCommissioningInstance.Init() ran on the app thread immediately
+after InitServer was scheduled to the Matter thread; the registration
+target (CodegenDataModelProvider registry) is only set up inside
+InitServer, so Init() failed and the error was silently discarded.
+Symptom: commissioners fail at AddOrUpdateWiFiNetwork with
+UNSUPPORTED_COMMAND (cluster 0x31 registered no command handlers).
+
+Upstream candidate: yes (bug affects any WiFi user of this scaffold).
+
+diff --git a/examples/platform/silabs/zephyr/AppTaskBase.cpp b/examples/platform/silabs/zephyr/AppTaskBase.cpp
+index 0d471f1193..f35dbe722d 100644
+--- a/examples/platform/silabs/zephyr/AppTaskBase.cpp
++++ b/examples/platform/silabs/zephyr/AppTaskBase.cpp
+@@ -185,6 +185,12 @@ void chip::Zephyr::App::AppTaskBase::InitServer(intptr_t arg)
+     gExampleDeviceInfoProvider.SetStorageDelegate(persistentStorage);
+     chip::DeviceLayer::SetDeviceInfoProvider(&gExampleDeviceInfoProvider);
+ 
++#if CONFIG_CHIP_WIFI || CHIP_DEVICE_CONFIG_ENABLE_WPA
++    // Must run on the Matter thread after Server::Init: registration goes
++    // into the CodegenDataModelProvider registry set up above.
++    VerifyOrDie(sNetworkCommissioningInstance.Init() == CHIP_NO_ERROR);
++#endif
++
+     GetAppTask().PostInitMatterServerInstance();
+     ChipLogDetail(DeviceLayer, "finishing init");
+ 
+@@ -281,7 +287,9 @@ CHIP_ERROR chip::Zephyr::App::AppTaskBase::Init()
+     VerifyOrDie(PlatformMgr().ScheduleWork(InitServer, 0) == CHIP_NO_ERROR);
+ 
+ #if CONFIG_CHIP_WIFI || CHIP_DEVICE_CONFIG_ENABLE_WPA
+-    sNetworkCommissioningInstance.Init();
++    // NetworkCommissioning instance init moved into InitServer: calling it
++    // here raced the scheduled InitServer and lost, leaving the cluster
++    // without command handlers (and the error was silently discarded).
+ #ifdef ENABLE_CHIP_SHELL
+     Shell::SetWiFiDriver(chip::Zephyr::App::GetAppTask().GetWifiDriverInstance());
+ #endif
