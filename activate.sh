@@ -16,5 +16,7 @@ source modules/connectedhomeip/scripts/activate.sh
 # shellcheck disable=SC1091
 source .venv-zephyr/bin/activate
 
-export EXTRA_ZEPHYR_MODULES="$PWD/modules/connectedhomeip/config/zephyr/chip-module"
+# The CHIP Zephyr module itself is registered by app/CMakeLists.txt, not by
+# environment, so builds fail loudly rather than misconfigure when this
+# script wasn't sourced. ZAP still needs to be found here.
 export ZAP_INSTALL_PATH="$PWD/modules/connectedhomeip/.environment/cipd/packages/zap"

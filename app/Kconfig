@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Opt into CHIP's Zephyr defaults (deterministic workspace-relative path;
+# orsource with env vars silently no-ops). Two of its defaults are wrong
+# for this WiFi-only, no-OTA device and are overridden in prj.conf:
+# NET_L2_OPENTHREAD and CHIP_OTA_REQUESTOR.
+rsource "../modules/connectedhomeip/config/zephyr/chip-module/Kconfig.defaults"
+
+# The ESP32 WiFi/BT drivers contribute promptless HEAP_MEM_POOL_ADD_SIZE_*
+# defaults (51200 + 25600) that set the floor of the statically-allocated
+# kernel heap — far above measured need (peak ~42K with both radios active
+# and trimmed driver buffers). Kconfig takes the first default it sees, and
+# this file is parsed before the driver tree, so re-declaring the symbols
+# here lowers the floor. dram0_0_seg is 136K total; every KB counts.
+config HEAP_MEM_POOL_ADD_SIZE_ESP_WIFI
+	int
+	default 24576
+
+config HEAP_MEM_POOL_ADD_SIZE_ESP_BT
+	int
+	default 16384
+
+choice LEDCTRL_MODE
+	prompt "LED strip type"
+	default LEDCTRL_MODE_CCT
+
+config LEDCTRL_MODE_CCT
+	bool "2-channel tunable white (CCT) strip"
+
+config LEDCTRL_MODE_RGB
+	bool "3-channel RGB strip"
+
+endchoice
+
+if LEDCTRL_MODE_CCT
+
+config LEDCTRL_CH_WARM
+	int "led_pwm channel index of the warm-white strip channel"
+	default 1
+
+config LEDCTRL_CH_COOL
+	int "led_pwm channel index of the cool-white strip channel"
+	default 0
+
+config LEDCTRL_MIREDS_COOL
+	int "Coolest supported color temperature (mireds)"
+	default 154
+
+config LEDCTRL_MIREDS_WARM
+	int "Warmest supported color temperature (mireds)"
+	default 370
+
+endif # LEDCTRL_MODE_CCT
+
+source "Kconfig.zephyr"

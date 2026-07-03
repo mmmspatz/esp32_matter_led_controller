@@ -1,0 +1,34 @@
+Place the CHIP sys_heap buffer in .noinit rather than .bss.
+
+On ESP32 the primary DRAM segment (dram0_0_seg, where .bss lives) is
+136K after the BT controller reserve, and the radio driver kernel-pool
+contributions already consume a third of it. The second bank (SRAM1)
+only receives .noinit sections on this port. A heap buffer needs no
+zero-initialization, so marking it __noinit relocates the entire CHIP
+heap to the otherwise-underused second bank.
+
+Upstream candidate: maybe (harmless generally, but only ESP32 needs it).
+
+diff --git a/src/platform/Zephyr/SysHeapMalloc.cpp b/src/platform/Zephyr/SysHeapMalloc.cpp
+index 7c057ac8ea..371addc014 100644
+--- a/src/platform/Zephyr/SysHeapMalloc.cpp
++++ b/src/platform/Zephyr/SysHeapMalloc.cpp
+@@ -22,6 +22,7 @@
+ 
+ extern "C" {
+ #include <zephyr/init.h>
++#include <zephyr/linker/section_tags.h>
+ #include <zephyr/sys/math_extras.h>
+ #include <zephyr/sys/mutex.h>
+ #include <zephyr/sys/sys_heap.h>
+@@ -38,7 +39,9 @@ namespace {
+ // Choose the value that guarantees that the returned memory blocks are castable to all built-in types.
+ constexpr size_t kMallocAlignment = alignof(long long);
+ 
+-uint8_t sHeapMemory[CONFIG_CHIP_MALLOC_SYS_HEAP_SIZE] alignas(kMallocAlignment);
++// __noinit: a heap needs no zero-init, and on ESP32 this moves the buffer
++// out of the starved primary DRAM bank into the noinit-only second bank.
++uint8_t __noinit sHeapMemory[CONFIG_CHIP_MALLOC_SYS_HEAP_SIZE] alignas(kMallocAlignment);
+ sys_heap sHeap;
+ SYS_MUTEX_DEFINE(sLock);
+ 

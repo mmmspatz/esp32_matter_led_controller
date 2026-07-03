@@ -5,4 +5,4 @@
 # image does not link.
 config HEAP_MEM_POOL_ADD_SIZE_BOARD
 	int
-	default 4096 if BOARD_BTF_WLED_ESP32_ESP32_PROCPU
+	default 2048 if BOARD_BTF_WLED_ESP32_ESP32_PROCPU

@@ -1,0 +1,17 @@
+WiFiManager.cpp calls assert() but never includes <cassert>; on
+nRF/NXP toolchains the declaration arrives transitively, with the
+Zephyr SDK Xtensa toolchain (picolibc) it does not.
+
+Upstream candidate: yes (trivial portability fix).
+
+--- a/src/platform/Zephyr/wifi/WiFiManager.cpp
++++ b/src/platform/Zephyr/wifi/WiFiManager.cpp
+@@ -20,6 +20,8 @@
+  *          Provides the wrapper for Zephyr WiFi API
+  */
+
++#include <cassert>
++
+ #include "WiFiManager.h"
+
+ #include <crypto/RandUtils.h>
