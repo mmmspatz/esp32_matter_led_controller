@@ -1,0 +1,30 @@
+Zephyr BLEManagerImpl::_Shutdown(): mark CHIPoBLE service mode disabled.
+
+_Shutdown() calls bt_disable() but leaves mServiceMode == Enabled, so a
+subsequent DriveBLEState() (whose advertise gate is mServiceMode == Enabled)
+could re-enter StartAdvertising() -> bt_enable(). Set the service mode to
+Disabled first, mirroring the ESP32/NimBLE BLEManagerImpl.
+
+This matters when the application reclaims the BT-controller DRAM after
+commissioning (see chip-patches/0005 + Malloc::AddReclaimedRegion): bringing
+the controller back up would touch freed memory. It makes BLE strictly a
+one-shot, commissioning-only resource per boot.
+
+Upstream candidate: yes (aligns the Zephyr platform with the NimBLE one).
+
+diff --git a/src/platform/Zephyr/BLEManagerImpl.cpp b/src/platform/Zephyr/BLEManagerImpl.cpp
+index c5a4b5f582..d5de9a076c 100644
+--- a/src/platform/Zephyr/BLEManagerImpl.cpp
++++ b/src/platform/Zephyr/BLEManagerImpl.cpp
+@@ -264,6 +264,11 @@ CHIP_ERROR BLEManagerImpl::_Init()
+ 
+ void BLEManagerImpl::_Shutdown()
+ {
++    // Mark CHIPoBLE disabled before tearing the controller down so a later
++    // DriveBLEState() cannot re-enter StartAdvertising() -> bt_enable(). On
++    // platforms that reclaim the BT-controller DRAM after commissioning, bringing
++    // the controller back would touch freed memory; keep BLE one-way per boot.
++    mServiceMode = ConnectivityManager::kCHIPoBLEServiceMode_Disabled;
+     bt_disable();
+ }
+ 

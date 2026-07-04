@@ -41,11 +41,124 @@
 #include "OTARequestorInitiator.h"
 #endif
 
+#ifdef CONFIG_LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING
+#include <platform/Zephyr/SysHeapMalloc.h>
+#include <platform/internal/BLEManager.h>
+
+#include <zephyr/kernel.h>
+#include <esp_bt.h>
+#endif
+
 using namespace chip::app;
 using namespace ::chip;
 using namespace ::chip::Inet;
 using namespace ::chip::System;
 using namespace ::chip::DeviceLayer;
+
+#ifdef CONFIG_LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING
+namespace {
+
+// Reclaim the ESP32 BT-controller DRAM reserve once BLE-based commissioning is
+// done. When the device is fully provisioned and on WiFi and the commissioner
+// has dropped the BLE link, tear the controller down (bt_disable, via
+// BLEMgr().Shutdown()) and hand the CONFIG_ESP32_BT_RESERVE_DRAM window to the
+// CHIP heap as a second bank. One-way: BLE cannot return without a reboot (see
+// chip-patches 0005/0006). Net gain is only the ~54.8 KiB linker reserve.
+
+constexpr uint32_t kBleReclaimRetryIntervalSec = 2;
+constexpr int kBleReclaimMaxRetries            = 15;
+
+// Linker symbol for the bottom of the app's dram0 segment == one past the top
+// of the BT-controller reserve. The reserve window is
+// [procpu_dram0_org - CONFIG_ESP32_BT_RESERVE_DRAM, procpu_dram0_org).
+extern "C" uint8_t procpu_dram0_org[];
+
+BUILD_ASSERT(CONFIG_ESP32_BT_RESERVE_DRAM >= 4096, "BT reserve unexpectedly small");
+
+bool sBleReclaimDone   = false;
+int sBleReclaimRetries = 0;
+
+void ReclaimBtDramWork(intptr_t);
+
+void ReclaimRetryTimer(chip::System::Layer *, void *)
+{
+    ReclaimBtDramWork(0);
+}
+
+void ReclaimBtDramWork(intptr_t)
+{
+    VerifyOrReturn(!sBleReclaimDone);
+
+    // Don't tear BLE down while the commissioner still holds the PASE link.
+    if (chip::DeviceLayer::Internal::BLEMgr().NumConnections() != 0)
+    {
+        if (++sBleReclaimRetries > kBleReclaimMaxRetries)
+        {
+            ChipLogProgress(DeviceLayer, "BT reclaim: BLE still connected after %d retries; proceeding",
+                            kBleReclaimMaxRetries);
+        }
+        else
+        {
+            LogErrorOnFailure(SystemLayer().StartTimer(System::Clock::Seconds32(kBleReclaimRetryIntervalSec),
+                                                       ReclaimRetryTimer, nullptr));
+            return;
+        }
+    }
+
+    Malloc::Stats stats;
+    size_t freeBefore = (Malloc::GetStats(stats) == CHIP_NO_ERROR) ? stats.free : 0;
+
+    // Synchronous on this port: BleLayer shutdown + bt_disable() aborts the BT
+    // RX workqueue and deinits the controller to IDLE.
+    chip::DeviceLayer::Internal::BLEMgr().Shutdown();
+
+    if (esp_bt_controller_get_status() != ESP_BT_CONTROLLER_STATUS_IDLE)
+    {
+        ChipLogError(DeviceLayer, "BT reclaim: controller not IDLE after shutdown; skipping");
+        sBleReclaimDone = true;
+        return;
+    }
+
+    // Do the math in uintptr_t: pointer arithmetic on the linker symbol (an
+    // array type) would look like a negative index to -Werror=array-bounds.
+    const uintptr_t org = reinterpret_cast<uintptr_t>(procpu_dram0_org);
+    void * base         = reinterpret_cast<void *>(org - CONFIG_ESP32_BT_RESERVE_DRAM);
+    __ASSERT(reinterpret_cast<uintptr_t>(base) == 0x3ffb0000u, "BT reserve base moved to 0x%lx",
+             (unsigned long) reinterpret_cast<uintptr_t>(base));
+
+    CHIP_ERROR err = Malloc::AddReclaimedRegion(base, CONFIG_ESP32_BT_RESERVE_DRAM);
+    sBleReclaimDone = true;
+    if (err != CHIP_NO_ERROR)
+    {
+        ChipLogError(DeviceLayer, "BT reclaim: AddReclaimedRegion failed: %" CHIP_ERROR_FORMAT, err.Format());
+        return;
+    }
+
+    size_t freeAfter = (Malloc::GetStats(stats) == CHIP_NO_ERROR) ? stats.free : 0;
+    ChipLogProgress(DeviceLayer, "BT reclaim: added %u bytes at %p; heap free %u -> %u",
+                    (unsigned) CONFIG_ESP32_BT_RESERVE_DRAM, (void *) base, (unsigned) freeBefore,
+                    (unsigned) freeAfter);
+}
+
+void MaybeStartBtReclaim()
+{
+    VerifyOrReturn(!sBleReclaimDone);
+    // The only precondition is that the device is provisioned: once it is, BLE
+    // is no longer needed for initial commissioning, and its teardown is
+    // independent of WiFi state. We deliberately do NOT gate on
+    // IsWiFiStationConnected() -- that lags the kWiFiConnectivityChange event
+    // (it flips only once WiFiManager reaches CONNECTED), so gating on it here
+    // would miss the already-provisioned-reboot trigger. During a fresh
+    // commission the WiFi-established trigger fires before provisioning
+    // completes and bails here; kCommissioningComplete drives it instead.
+    VerifyOrReturn(ConfigurationMgr().IsFullyProvisioned());
+
+    sBleReclaimRetries = 0;
+    LogErrorOnFailure(PlatformMgr().ScheduleWork(ReclaimBtDramWork, 0));
+}
+
+} // namespace
+#endif // CONFIG_LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING
 
 void chip::Zephyr::App::CommonDeviceCallbacks::DeviceEventCallback(const ChipDeviceEvent * event, intptr_t arg)
 {
@@ -74,10 +187,15 @@ void chip::Zephyr::App::CommonDeviceCallbacks::DeviceEventCallback(const ChipDev
         OnInterfaceIpAddressChanged(event);
         break;
 
-#if CHIP_ENABLE_OPENTHREAD
     case DeviceEventType::kCommissioningComplete:
+#if CHIP_ENABLE_OPENTHREAD
         CommonDeviceCallbacks::OnCommissioningComplete(event);
+#endif
+#ifdef CONFIG_LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING
+        MaybeStartBtReclaim();
+#endif
         break;
+#if CHIP_ENABLE_OPENTHREAD
 #if CHIP_DEVICE_CONFIG_ENABLE_WPA
     case DeviceEventType::kThreadConnectivityChange:
         if (event->ThreadConnectivityChange.Result == kConnectivity_Established)
@@ -108,6 +226,11 @@ void chip::Zephyr::App::CommonDeviceCallbacks::OnWiFiConnectivityChange(const Ch
     if (event->WiFiConnectivityChange.Result == kConnectivity_Established)
     {
         ChipLogProgress(DeviceLayer, "WiFi connection established");
+#ifdef CONFIG_LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING
+        // Belt-and-suspenders: if WiFi comes up (or re-establishes) after the
+        // device is already provisioned, this drives the one-shot reclaim too.
+        MaybeStartBtReclaim();
+#endif
     }
     else if (event->WiFiConnectivityChange.Result == kConnectivity_Lost)
     {

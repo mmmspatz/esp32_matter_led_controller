@@ -1,0 +1,179 @@
+Give the CHIP sys_heap allocator a second, runtime-added heap bank.
+
+Converts the single sys_heap behind malloc/free into a sys_multi_heap so a
+region discovered at runtime can be handed to the allocator after boot. A
+choice callback keeps the existing buffer as the primary bank and spills into
+the added bank only when the primary is exhausted; sys_multi_heap tracks bank
+ownership so free/realloc route to the correct backend, and GetStats folds in
+both banks (maxUsed becomes an upper bound).
+
+The motivating use is the ESP32 port, where the Bluetooth controller's
+CONFIG_ESP32_BT_RESERVE_DRAM region (~54.8 KiB) is dead weight once BLE-based
+commissioning is done; after bt_disable() the application calls
+Malloc::AddReclaimedRegion() to donate that window to the heap. The mechanism
+itself is platform-agnostic.
+
+Stacks on 0002 (which only relocates the primary buffer to .noinit).
+Requires CONFIG_MULTI_HEAP=y.
+
+Upstream candidate: yes (generically useful; no ESP32 specifics here).
+
+diff --git a/src/platform/Zephyr/SysHeapMalloc.cpp b/src/platform/Zephyr/SysHeapMalloc.cpp
+index 371addc014..c5a29bc14c 100644
+--- a/src/platform/Zephyr/SysHeapMalloc.cpp
++++ b/src/platform/Zephyr/SysHeapMalloc.cpp
+@@ -24,6 +24,7 @@ extern "C" {
+ #include <zephyr/init.h>
+ #include <zephyr/linker/section_tags.h>
+ #include <zephyr/sys/math_extras.h>
++#include <zephyr/sys/multi_heap.h>
+ #include <zephyr/sys/mutex.h>
+ #include <zephyr/sys/sys_heap.h>
+ }
+@@ -43,6 +44,16 @@ constexpr size_t kMallocAlignment = alignof(long long);
+ // out of the starved primary DRAM bank into the noinit-only second bank.
+ uint8_t __noinit sHeapMemory[CONFIG_CHIP_MALLOC_SYS_HEAP_SIZE] alignas(kMallocAlignment);
+ sys_heap sHeap;
++
++// A second heap bank populated at runtime by AddReclaimedRegion() once a region
++// becomes available (e.g. the ESP32 BT-controller DRAM reserve, freed after
++// commissioning). Allocations use the primary heap first and spill into this
++// bank only when the primary is exhausted; sys_multi_heap tracks bank ownership
++// so free/realloc route back to the correct backend.
++sys_heap sReclaimedHeap;
++sys_multi_heap sMultiHeap;
++bool sReclaimedActive;
++
+ SYS_MUTEX_DEFINE(sLock);
+ 
+ // RAII helper for synchronizing access to the common heap.
+@@ -67,9 +78,32 @@ LockGuard::~LockGuard()
+     }
+ }
+ 
++// Multi-heap allocation policy: satisfy from the primary heap first and spill to
++// the reclaimed bank only when the primary is full. Runs with sLock held (via the
++// wrappers below, and via sys_multi_heap_aligned_realloc's block-move path).
++void * HeapChoice(sys_multi_heap * mheap, void * cfg, size_t align, size_t size)
++{
++    (void) mheap;
++    (void) cfg;
++
++    if (align < kMallocAlignment)
++    {
++        align = kMallocAlignment;
++    }
++
++    void * mem = sys_heap_aligned_alloc(&sHeap, align, size);
++    if (mem == nullptr && sReclaimedActive)
++    {
++        mem = sys_heap_aligned_alloc(&sReclaimedHeap, align, size);
++    }
++    return mem;
++}
++
+ int InitSysHeapMalloc()
+ {
+     sys_heap_init(&sHeap, sHeapMemory, sizeof(sHeapMemory));
++    sys_multi_heap_init(&sMultiHeap, HeapChoice);
++    sys_multi_heap_add_heap(&sMultiHeap, &sHeap, nullptr);
+     return 0;
+ }
+ 
+@@ -87,7 +121,7 @@ void * Malloc(size_t size)
+ {
+     LockGuard lockGuard;
+ 
+-    return lockGuard.Locked() ? sys_heap_aligned_alloc(&sHeap, kMallocAlignment, size) : nullptr;
++    return lockGuard.Locked() ? sys_multi_heap_aligned_alloc(&sMultiHeap, nullptr, kMallocAlignment, size) : nullptr;
+ }
+ 
+ void * Calloc(size_t num, size_t size)
+@@ -113,7 +147,7 @@ void * Realloc(void * mem, size_t size)
+ {
+     LockGuard lockGuard;
+ 
+-    return lockGuard.Locked() ? sys_heap_aligned_realloc(&sHeap, mem, kMallocAlignment, size) : nullptr;
++    return lockGuard.Locked() ? sys_multi_heap_aligned_realloc(&sMultiHeap, nullptr, mem, kMallocAlignment, size) : nullptr;
+ }
+ 
+ void Free(void * mem)
+@@ -121,7 +155,30 @@ void Free(void * mem)
+     LockGuard lockGuard;
+ 
+     VerifyOrReturn(lockGuard.Locked());
+-    sys_heap_free(&sHeap, mem);
++    sys_multi_heap_free(&sMultiHeap, mem);
++}
++
++CHIP_ERROR AddReclaimedRegion(void * base, size_t size)
++{
++    LockGuard lockGuard;
++    ReturnErrorOnFailure(lockGuard.Error());
++
++    VerifyOrReturnError(!sReclaimedActive, CHIP_ERROR_INCORRECT_STATE);
++    VerifyOrReturnError(base != nullptr, CHIP_ERROR_INVALID_ARGUMENT);
++
++    // Round the region down to the malloc alignment; sys_heap needs a little
++    // bookkeeping space, so reject anything too small to be worth a bank.
++    size &= ~(static_cast<size_t>(kMallocAlignment) - 1);
++    VerifyOrReturnError(size >= 256, CHIP_ERROR_INVALID_ARGUMENT);
++
++    sys_heap_init(&sReclaimedHeap, base, size);
++    // Register the bank before setting the flag: the choice callback only hands
++    // out reclaimed-bank pointers once sReclaimedActive is true, so by then the
++    // bank is already resolvable by the free/realloc ownership lookup.
++    sys_multi_heap_add_heap(&sMultiHeap, &sReclaimedHeap, nullptr);
++    sReclaimedActive = true;
++
++    return CHIP_NO_ERROR;
+ }
+ 
+ #ifdef CONFIG_SYS_HEAP_RUNTIME_STATS
+@@ -138,12 +195,27 @@ CHIP_ERROR GetStats(Stats & stats)
+     stats.used    = sysHeapStats.allocated_bytes;
+     stats.maxUsed = sysHeapStats.max_allocated_bytes;
+ 
++    // Fold in the reclaimed bank once active. Note maxUsed becomes an upper
++    // bound: the two banks' peaks are summed even though they need not coincide.
++    if (sReclaimedActive)
++    {
++        sys_memory_stats reclaimedStats;
++        ReturnErrorOnFailure(System::MapErrorZephyr(sys_heap_runtime_stats_get(&sReclaimedHeap, &reclaimedStats)));
++        stats.free += reclaimedStats.free_bytes;
++        stats.used += reclaimedStats.allocated_bytes;
++        stats.maxUsed += reclaimedStats.max_allocated_bytes;
++    }
++
+     return CHIP_NO_ERROR;
+ }
+ 
+ void ResetMaxStats()
+ {
+     (void) sys_heap_runtime_stats_reset_max(&sHeap);
++    if (sReclaimedActive)
++    {
++        (void) sys_heap_runtime_stats_reset_max(&sReclaimedHeap);
++    }
+ }
+ 
+ #endif // CONFIG_SYS_HEAP_RUNTIME_STATS
+diff --git a/src/platform/Zephyr/SysHeapMalloc.h b/src/platform/Zephyr/SysHeapMalloc.h
+index ca2383027e..e9e5ff5151 100644
+--- a/src/platform/Zephyr/SysHeapMalloc.h
++++ b/src/platform/Zephyr/SysHeapMalloc.h
+@@ -37,6 +37,14 @@ void Free(void * mem);
+ CHIP_ERROR GetStats(Stats & stats);
+ void ResetMaxStats();
+ 
++// Add a second heap bank backed by [base, base + size) to the allocator at
++// runtime. Used to hand a freed region (e.g. the ESP32 BT-controller DRAM
++// reserve, reclaimed after commissioning) to malloc. May be called once; the
++// region must be exclusively owned and remain valid for the process lifetime.
++// Allocations prefer the primary heap and only spill into this bank when it is
++// exhausted.
++CHIP_ERROR AddReclaimedRegion(void * base, size_t size);
++
+ } // namespace Malloc
+ } // namespace DeviceLayer
+ } // namespace chip

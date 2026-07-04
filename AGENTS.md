@@ -32,7 +32,10 @@ Version pins (manifest/west.yml) — do not bump casually:
   `west update`. Current set: 0002 `__noinit` heap placement
   (ESP32-specific, load-bearing), 0003 NXP Kconfig.defaults legacy
   mbedTLS symbols (fatal typeless defaults under 4.4), 0004 skip
-  add_entropy_source under CHIP_CRYPTO_PSA (boot fails 0x6C without).
+  add_entropy_source under CHIP_CRYPTO_PSA (boot fails 0x6C without),
+  0005 `sys_multi_heap` + `Malloc::AddReclaimedRegion()` in SysHeapMalloc
+  (runtime BT-DRAM reclaim; stacks on 0002), 0006 Zephyr BLE `_Shutdown`
+  sets `mServiceMode = Disabled` (makes BLE strictly one-way for the reclaim).
 
 ## Build / flash / monitor
 
@@ -118,6 +121,20 @@ static allocation matters. Standing arrangements:
   don't hand-trim the pools).
 - When dram0 overflows: force the link with `-Wl,--noinhibit-exec`, then
   `nm --size-sort` on `zephyr_pre0.elf` and cut what's actually there.
+- Post-commissioning BT-DRAM reclaim (`CONFIG_LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING`,
+  default y): once provisioned, the app (CommonDeviceCallbacks, on
+  `kCommissioningComplete` and on WiFi-established-while-provisioned) tears BLE
+  down (`BLEMgr().Shutdown()` → `bt_disable()`, waits for `NumConnections()==0`),
+  verifies the controller is IDLE, then `sys_multi_heap`-adds the 54.8K reserve
+  window `[procpu_dram0_org − CONFIG_ESP32_BT_RESERVE_DRAM, procpu_dram0_org)` =
+  `[0x3ffb0000, 0x3ffbdb5c)` to the CHIP malloc heap. The reserve is a *link-time*
+  carve-out below dram0, so this is runtime-only (doesn't relieve static dram0);
+  it hands ~54.7K to `malloc` for OTA/session headroom. HW-verified: heap free
+  jumps ~+54.7K on both trigger paths, cluster control fine afterward. One-way:
+  BLE can't return without a reboot (patch 0006), so additional-fabric
+  commissioning is on-network. `esp_bt_mem_release` is a Zephyr no-op stub and
+  `heap_caps` is just a `k_malloc` shim, so the reclaim is done Zephyr-natively
+  in the app/CHIP layer, not via the HAL.
 
 ## Gotchas (each cost real debugging time)
 

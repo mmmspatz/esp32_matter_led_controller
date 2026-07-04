@@ -64,4 +64,19 @@ config LEDCTRL_MIREDS_WARM
 
 endif # LEDCTRL_MODE_CCT
 
+config LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING
+	bool "Reclaim the BT-controller DRAM reserve after commissioning"
+	depends on BT && CHIP_MALLOC_SYS_HEAP && SOC_SERIES_ESP32
+	default y
+	select MULTI_HEAP
+	select SYS_HEAP_RUNTIME_STATS
+	help
+	  After the device is fully provisioned and joined to WiFi, tear down the
+	  BLE stack (bt_disable) and hand the ~54.8 KiB CONFIG_ESP32_BT_RESERVE_DRAM
+	  region to the CHIP sys_heap as a second heap bank (see chip-patches
+	  0005/0006). This makes BLE a one-way, commissioning-only resource: it
+	  CANNOT be re-enabled without a reboot, so additional-fabric commissioning
+	  must happen on-network (PASE over IP, which commissioners support). A
+	  factory reset reboots, restoring BLE for re-commissioning.
+
 source "Kconfig.zephyr"
