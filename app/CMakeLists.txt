@@ -49,6 +49,17 @@ target_sources(app
     src/scaffold/DataModelCallbacks.cpp
 )
 
+# OTA Requestor glue, vendored from CHIP's examples/platform/silabs/zephyr/
+# ota_requestor (pin 9d45993e3f) so we own it — see the RAM-relocation edits in
+# OTARequestorInitiator.h / *Common.cpp. Re-diff against upstream when re-pinning.
+if(CONFIG_CHIP_OTA_REQUESTOR)
+    target_include_directories(app PRIVATE src/scaffold/ota_requestor/include)
+    target_sources(app PRIVATE
+        src/scaffold/ota_requestor/source/OTARequestorInitiatorCommon.cpp
+        src/scaffold/ota_requestor/source/OTARequestorInitiatorZephyr.cpp
+    )
+endif()
+
 if(CONFIG_LEDCTRL_PROV_SHELL)
     target_sources(app PRIVATE src/ProvisionShell.cpp)
 endif()

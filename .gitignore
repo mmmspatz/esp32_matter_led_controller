@@ -18,6 +18,9 @@ twister-out*/
 # Per-device provisioning records (pairing codes are secrets).
 /devices/
 
+# MCUboot OTA image signing key (private key is a secret).
+/keys/
+
 # Python detritus.
 *.pyc
 __pycache__/
