@@ -167,12 +167,8 @@ static allocation matters. Standing arrangements:
   Matter Server (matter.js, HA 2026.7+) rejects them under its default
   production trust policy — commissioning reaches DeviceAttestation then
   fails. Enable Settings → Apps → Matter Server → Configuration →
-  "Enable test-net DCL usage" to commission. Google rejects; Alexa
-  unverified.
-- HA companion-app commissioning flaked at the last (adoption) step even
-  though the device joined HA's fabric (VID 0x6006) and answered its
-  subscriptions — device side is proven good via chip-tool; debug HA
-  server-side if it recurs.
+  "Enable test-net DCL usage" to commission (needed all the way through
+  adoption, not just DeviceAttestation). Google rejects; Alexa unverified.
 
 ## Local controller (chip-tool)
 
