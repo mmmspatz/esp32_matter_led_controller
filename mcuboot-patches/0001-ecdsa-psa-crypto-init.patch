@@ -1,0 +1,16 @@
+diff --git a/boot/bootutil/include/bootutil/crypto/ecdsa.h b/boot/bootutil/include/bootutil/crypto/ecdsa.h
+index 35f0930f..9927c7db 100644
+--- a/boot/bootutil/include/bootutil/crypto/ecdsa.h
++++ b/boot/bootutil/include/bootutil/crypto/ecdsa.h
+@@ -388,6 +388,11 @@ static const uint8_t Secp384r1[] = {0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22};
+ 
+ static inline void bootutil_ecdsa_init(bootutil_ecdsa_context *ctx)
+ {
++    /* The PSA subsystem must be initialized before psa_import_key /
++     * psa_verify_hash. Unlike ed25519_psa.c, MCUboot's ECDSA-PSA path never
++     * calls this, so on a bare-metal bootloader (no Zephyr SYS_INIT for PSA)
++     * the verify wedges. Idempotent -- see encrypted_psa.c. */
++    (void)psa_crypto_init();
+ #if !defined(MCUBOOT_BUILTIN_KEY)
+     ctx->key_id = PSA_KEY_ID_NULL;
+     ctx->curve_byte_count = 0;

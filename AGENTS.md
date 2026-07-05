@@ -189,26 +189,39 @@ chip-tool pairing unpair 1
 ## OTA (firmware update over WiFi)
 
 Working end-to-end via BOTH chip-tool (dev harness) and Home Assistant (the
-production path). MCUboot (sysbuild, overwrite-only, RSA-2048 signed) + CHIP OTA
-Requestor; config in `app/sysbuild.conf` + `prj.conf`. See also [OTA approach] and
-[HA OTA integration] in the auto-memory for the full bring-up story.
+production path). MCUboot (sysbuild, overwrite-only, ECDSA-P256 signed) + CHIP OTA
+Requestor; config in `app/sysbuild.conf` + `sysbuild/mcuboot.conf` + `prj.conf`.
+See also [OTA approach] and [HA OTA integration] in the auto-memory for the full
+bring-up story.
 
 ### Build a signed `.ota`
 ```bash
 # 1. bump the version the requestor compares (prj.conf), rebuild
 #    CONFIG_CHIP_DEVICE_SOFTWARE_VERSION=<N> + _STRING="0.0.<N>"
-west build -b btf_wled_esp32/esp32/procpu app
+#    --sysbuild is REQUIRED (else no MCUboot image / no zephyr.signed.bin);
+#    build.sysbuild is not set in west config here.
+west build --sysbuild -b btf_wled_esp32/esp32/procpu app
 # 2. wrap the SIGNED slot image (NOT raw zephyr.bin) as a Matter OTA image
 python modules/connectedhomeip/src/app/ota_image_tool.py create \
   -v 0xFFF1 -p 0x8005 -vn <N> -vs "0.0.<N>" -da sha256 \
   build/app/zephyr/zephyr.signed.bin fw.ota
 ```
 - PID is **0x8005** (0x010C/0x010D are device-type IDs, not PIDs); VID 0xFFF1 (test).
-- Payload is `zephyr.signed.bin` (MCUboot-headered + RSA-signed). Signature type is
-  set by sysbuild (`SB_CONFIG_BOOT_SIGNATURE_TYPE_RSA` + key), not the SoC overlay;
-  MCUboot validates the SECONDARY before swap (slot0 itself is unvalidated,
-  `BOOT_VALIDATE_SLOT0=n`). Editing a `sysbuild/<image>.conf` overlay needs a
-  pristine build (`-p always`) — overlays are discovered only at configure time.
+- Payload is `zephyr.signed.bin` (MCUboot-headered + ECDSA-P256-signed). Signature
+  type is set by sysbuild (`SB_CONFIG_BOOT_SIGNATURE_TYPE_ECDSA_P256` + key), not the
+  SoC overlay; MCUboot validates the SECONDARY before swap (slot0 itself is
+  unvalidated, `BOOT_VALIDATE_SLOT0=n`). Editing a `sysbuild/<image>.conf` overlay
+  needs a pristine build (`-p always`) — overlays are discovered only at configure time.
+- **ECDSA-P256 needs the PSA verify backend, and upstream MCUboot under-builds it.**
+  The CHIP platform force-includes mbedTLS/PSA (so tinycrypt collides) and Zephyr 4.4's
+  mbedTLS-4 split breaks legacy-mbedTLS ECDSA — only `BOOT_ECDSA_PSA` is left, and it
+  is the least-exercised backend. Two fixes make it work on this no-OS, zero-libc-arena
+  bootloader, both in `sysbuild/mcuboot.conf` + `mcuboot-patches/0001`: (a)
+  `MBEDTLS_ENABLE_HEAP`/`HEAP_SIZE` (its `mbedtls_calloc` otherwise hits the zero-size
+  picolibc arena and the verify wedges — the original "hang in `bootutil_verify_sig`"),
+  and (b) `psa_crypto_init()` in the ECDSA path (present in ed25519's PSA path, missing
+  in ECDSA's; still missing on mcuboot `main` as of 2026-07). HW-verified: with both,
+  MCUboot validates the secondary and swaps to the new version.
 
 ### chip-tool path (dev)
 `ota-provider-app` at `build_ota_provider/` (`gn_build_example.sh

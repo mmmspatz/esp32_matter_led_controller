@@ -68,6 +68,18 @@ for p in "$PWD"/chip-patches/*.patch; do
         git -C modules/connectedhomeip apply "$p"
     fi
 done
+
+# Local patches to MCUboot (west module, reset by `west update`). 0001 adds the
+# psa_crypto_init() that MCUboot's ECDSA-PSA verify path is missing (ed25519 has
+# it) -- without it the ESP32 bootloader wedges verifying the OTA signature.
+for p in "$PWD"/mcuboot-patches/*.patch; do
+    if git -C bootloader/mcuboot apply --reverse --check "$p" 2>/dev/null; then
+        echo "mcuboot patch already applied: $(basename "$p")"
+    else
+        echo "applying mcuboot patch: $(basename "$p")"
+        git -C bootloader/mcuboot apply "$p"
+    fi
+done
 shopt -u nullglob
 
 # CHIP's own environment (gn, ninja, zap, ...) via pigweed CIPD.

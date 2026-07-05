@@ -38,3 +38,6 @@ __pycache__/
 
 # ZAP autosave backups.
 *.zap~
+
+# Generated Matter OTA image (build artifact).
+/fw.ota
