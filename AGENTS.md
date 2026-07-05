@@ -186,6 +186,86 @@ chip-tool colorcontrol move-to-color-temperature 370 6 0 0 1 1
 chip-tool pairing unpair 1
 ```
 
+## OTA (firmware update over WiFi)
+
+Working end-to-end via BOTH chip-tool (dev harness) and Home Assistant (the
+production path). MCUboot (sysbuild, overwrite-only, RSA-2048 signed) + CHIP OTA
+Requestor; config in `app/sysbuild.conf` + `prj.conf`. See also [OTA approach] and
+[HA OTA integration] in the auto-memory for the full bring-up story.
+
+### Build a signed `.ota`
+```bash
+# 1. bump the version the requestor compares (prj.conf), rebuild
+#    CONFIG_CHIP_DEVICE_SOFTWARE_VERSION=<N> + _STRING="0.0.<N>"
+west build -b btf_wled_esp32/esp32/procpu app
+# 2. wrap the SIGNED slot image (NOT raw zephyr.bin) as a Matter OTA image
+python modules/connectedhomeip/src/app/ota_image_tool.py create \
+  -v 0xFFF1 -p 0x8005 -vn <N> -vs "0.0.<N>" -da sha256 \
+  build/app/zephyr/zephyr.signed.bin fw.ota
+```
+- PID is **0x8005** (0x010C/0x010D are device-type IDs, not PIDs); VID 0xFFF1 (test).
+- Payload is `zephyr.signed.bin` (MCUboot-headered + RSA-signed). Signature type is
+  set by sysbuild (`SB_CONFIG_BOOT_SIGNATURE_TYPE_RSA` + key), not the SoC overlay;
+  MCUboot validates the SECONDARY before swap (slot0 itself is unvalidated,
+  `BOOT_VALIDATE_SLOT0=n`). Editing a `sysbuild/<image>.conf` overlay needs a
+  pristine build (`-p always`) — overlays are discovered only at configure time.
+
+### chip-tool path (dev)
+`ota-provider-app` at `build_ota_provider/` (`gn_build_example.sh
+examples/ota-provider-app build_ota_provider 'chip_config_network_layer_ble=false
+chip_enable_thread=false chip_support_thread_meshcop=false'` — else the
+ot-commissioner submodule breaks gn gen).
+```bash
+chip-ota-provider-app --discriminator 3840 --secured-device-port 5560 \
+  --KVS /tmp/ota_provider.kvs --filepath fw.ota          # reuse KVS to stay commissioned
+chip-tool pairing onnetwork-long 2 20202021 3840          # provider = node 2
+# then write an ACL on node 2 granting Operate (priv 3) on the OTA Provider cluster
+# (0x0029) to the requestor -- keep the admin entry, add an operate entry with
+# targets=[{cluster:41}] -- else the requestor's QueryImage is denied:
+chip-tool accesscontrol write acl '<admin+operate JSON>' 2 0
+chip-tool otasoftwareupdaterequestor announce-otaprovider 2 0 0 0 1 0   # tell node 1
+```
+BDX download of the ~1.3 MB image runs a few minutes. NOTE: this provider tolerates
+`ApplyUpdateRequest.newVersion=0`, so it will mask a device-side apply bug that a
+strict provider (HA) rejects — don't treat "works on chip-tool" as fully validated.
+
+### Home Assistant path (production, matter.js)
+- Enable **test-net-DCL** (Settings → Apps → Matter Server → Configuration): required
+  for the test certs AND for the custom local-OTA dir.
+- Put `fw.ota` + a JSON descriptor in the ROOT of
+  `/addon_configs/core_matter_server/updates/`, then restart the add-on to import:
+  ```json
+  { "modelVersion": { "vid": 65521, "pid": 32773, "softwareVersion": <N>,
+    "softwareVersionString": "0.0.<N>", "minApplicableSoftwareVersion": 0,
+    "maxApplicableSoftwareVersion": 2147483647, "otaUrl": "file:///fw.ota",
+    "otaFileSize": <bytes>, "otaChecksum": "<base64(sha256(fw.ota))>",
+    "otaChecksumType": 1 } }
+  ```
+- Trigger: the HA update entity, or the matter-server WS API
+  `update_node{node_id, software_version}` at `ws://core-matter-server:5580/ws`. The
+  port is not published to the HA host and the SSH add-on prohibits `-L` forwarding —
+  run the WS client on the box (`apk add python3 py3-pip`, `pip install websockets`).
+  HA persistently re-drives queued updates: a node left below its target version gets
+  re-announced/re-downloaded on its own (a trigger may return "already in the process
+  of updating").
+
+### Device-side facts (load-bearing)
+- **`InitOTA` must run once, not per `kDnssdInitialized`.** The Zephyr WiFi driver
+  re-posts that event on every (re)connection (~every 100 s here) to rebind mDNS;
+  re-running InitOTA re-enters `DefaultOTARequestor::Init → LoadCurrentUpdateInfo`,
+  which reloads state from KVS and zeroes the in-RAM `mTargetVersion` mid-download →
+  `ApplyUpdateRequest.newVersion=0` → strict providers discontinue. Guarded one-shot
+  in `CommonDeviceCallbacks` (kDnssdInitialized case).
+- **Overwrite-only:** `Swap type: none` at boot is normal EVEN after a successful swap
+  — verify by the reported software version changing, not the swap log. MCUboot
+  self-erases slot1 after a successful swap (no app-level cleanup needed). No revert
+  (`CONFIG_CHIP_OTA_REQUEST_UPGRADE_PERMANENT=y`).
+- The apply reboot uses `sys_reboot(WARM)` → `rst:0x10 (RTCWDT_RTC_RESET)` (the
+  esp_restart-under-WiFi quirk); the pending flag is written first, so the upgrade
+  still takes.
+- Recovery from a bad/pending secondary: `esptool --chip esp32 erase-region 0x1F0000
+  0x1D0000` (slot1). slot0 is at 0x20000; both slots are 1856K.
+
 ## Scaffold provenance
 
 `app/src/scaffold/` is CHIP's `examples/platform/silabs/zephyr` (generic
