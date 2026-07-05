@@ -213,9 +213,26 @@ void chip::Zephyr::App::CommonDeviceCallbacks::DeviceEventCallback(const ChipDev
 #endif // CHIP_ENABLE_OPENTHREAD
     case DeviceLayer::DeviceEventType::kDnssdInitialized:
 #if CHIP_DEVICE_CONFIG_ENABLE_OTA_REQUESTOR
-        ChipLogProgress(DeviceLayer, "kDnssdInitialized");
-        /* Initialize OTA Requestor */
-        OTARequestorInitiator::Instance().InitOTA(reinterpret_cast<intptr_t>(&OTARequestorInitiator::Instance()));
+    {
+        // kDnssdInitialized is NOT a one-shot readiness signal on generic Zephyr WiFi: the WiFi
+        // driver re-posts it on every successful (re)connection as a workaround to rebind mDNS to
+        // the operative interface (src/platform/Zephyr/wifi/WiFiManager.cpp, "re-initialize mDNS
+        // server after Wi-Fi interface is operative"). This board re-establishes WiFi roughly every
+        // ~100 s, so the event recurs mid-OTA (a ~2 min BDX download always straddles one).
+        // Re-running InitOTA re-enters DefaultOTARequestor::Init -> LoadCurrentUpdateInfo, which
+        // reloads requestor state from KVS and zeroes the in-RAM mTargetVersion (never persisted
+        // during a download). The device would then send ApplyUpdateRequest.newVersion = 0;
+        // chip-tool's provider tolerates that, but a strict provider (matter.js / Home Assistant)
+        // discontinues the update. Initialize the OTA requestor once per boot.
+        static bool sOtaRequestorInitialized = false;
+        if (!sOtaRequestorInitialized)
+        {
+            ChipLogProgress(DeviceLayer, "kDnssdInitialized");
+            /* Initialize OTA Requestor */
+            OTARequestorInitiator::Instance().InitOTA(reinterpret_cast<intptr_t>(&OTARequestorInitiator::Instance()));
+            sOtaRequestorInitialized = true;
+        }
+    }
 #endif
         break;
     }
