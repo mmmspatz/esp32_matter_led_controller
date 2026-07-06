@@ -1,0 +1,6 @@
+board:
+  name: btf_wled_esp32c6
+  full_name: BTF-Lighting WLED Controller (ESP32-C6 rework)
+  vendor: btf
+  socs:
+  - name: esp32c6

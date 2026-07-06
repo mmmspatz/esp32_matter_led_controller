@@ -25,6 +25,13 @@
 			reg = <0x1000 DT_SIZE_K(60)>;
 		};
 
+		/* Vestigial (inherited from the stock layout): its only consumer
+		 * in the tree is the virtual-eFuse test mode
+		 * (ESP32_EFUSE_VIRTUAL_KEEP_IN_FLASH), which we don't enable.
+		 * Kept because this layout is on deployed boards -- reshuffling
+		 * offsets would orphan the storage partition contents. The 8M C6
+		 * layout drops it.
+		 */
 		sys_partition: partition@10000 {
 			label = "sys";
 			reg = <0x10000 DT_SIZE_K(64)>;

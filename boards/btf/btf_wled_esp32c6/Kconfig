@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# The Espressif interrupt controller and flash drivers k_malloc() at
+# runtime; without a board heap contribution the kernel heap is size 0
+# and the image does not link. 4096 matches esp32c6_devkitc.
+config HEAP_MEM_POOL_ADD_SIZE_BOARD
+	int
+	default 4096 if BOARD_BTF_WLED_ESP32C6_ESP32C6_HPCORE

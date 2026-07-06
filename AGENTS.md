@@ -6,6 +6,13 @@ with connectedhomeip's **generic Zephyr platform** (`src/platform/Zephyr`)
 instance of that combination; when something breaks, assume no prior art
 and read the source.
 
+A second board target exists for the planned ESP32-C6-WROOM-1-N8 module
+rework (`btf_wled_esp32c6/esp32c6/hpcore`; compiles, **not yet run on
+hardware**). Most of the RAM-diet machinery below is classic-ESP32-only
+and compiles out on the C6 — see `docs/esp32c6-rework-notes.md` for the
+pad mapping, the GPIO8 strap pull-up the rework needs, and what stops
+applying.
+
 ## Workspace
 
 T2 west topology: this repo is the manifest repo; `west update` populates
@@ -43,9 +50,16 @@ Version pins (manifest/west.yml) — do not bump casually:
 west build -b btf_wled_esp32/esp32/procpu app                                  # CCT (default)
 west build -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=rgb.conf    # RGB variant
 west build -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=prov.conf   # provisioning image
+west build --sysbuild -b btf_wled_esp32c6/esp32c6/hpcore app                   # C6 rework (unvalidated)
 west flash                            # esptool; board has working DTR/RTS autoboot
 west twister -p native_sim/native/64 -T tests   # color math unit tests
 ```
+
+Per-board app config lives in `app/boards/<board>_<qualifiers>.conf`
+(merged automatically after prj.conf, before EXTRA_CONF_FILE): the
+classic-ESP32 RAM diet is in `btf_wled_esp32_esp32_procpu.conf`, C6
+sizing in `btf_wled_esp32c6_esp32c6_hpcore.conf`. prj.conf stays
+SoC-portable.
 
 Serial console: 115200 on /dev/ttyUSB0. Flashing does NOT touch the
 storage partition: fabrics, WiFi credentials and provisioning survive.

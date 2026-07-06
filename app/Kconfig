@@ -1,5 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
+# chip-module's Kconfig.defaults (rsourced below) re-declares FPU with a
+# bare "default y" and no dependency. On an FPU-less core (the C6's
+# rv32imac) CPU_HAS_FPU=n hides the arch prompt, so .conf assignments are
+# IGNORED and that default wins -- the RISC-V reset.S then fails to
+# assemble (fscsr needs the F extension). Declare a guarded default first
+# (first satisfied default wins; this file parses before the rsource's
+# tree): no FPU without hardware. FPU-equipped SoCs fall through to y.
+config FPU
+	bool
+	default n if !CPU_HAS_FPU
+
 # Opt into CHIP's Zephyr defaults (deterministic workspace-relative path;
 # orsource with env vars silently no-ops). Its Thread-biased defaults are
 # wrong for this WiFi-only device and are overridden in prj.conf, notably

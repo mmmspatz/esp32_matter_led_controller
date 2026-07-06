@@ -50,7 +50,9 @@ pip install --quiet \
 # WiFi/BT MAC, PHY and coexistence libraries are proprietary Espressif blobs.
 west blobs fetch hal_espressif
 
-west sdk install -t xtensa-espressif_esp32_zephyr-elf
+# xtensa: classic ESP32 board; riscv64: the ESP32-C6 rework (one multilib
+# toolchain covers rv32 targets).
+west sdk install -t xtensa-espressif_esp32_zephyr-elf -t riscv64-zephyr-elf
 
 modules/connectedhomeip/scripts/checkout_submodules.py --shallow
 # Zephyr provides OpenThread (and we don't even enable it); CHIP's copy is

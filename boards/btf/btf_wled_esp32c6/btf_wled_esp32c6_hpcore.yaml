@@ -1,0 +1,14 @@
+identifier: btf_wled_esp32c6/esp32c6/hpcore
+name: BTF WLED ESP32-C6 HP Core
+type: mcu
+arch: riscv
+toolchain:
+  - zephyr
+supported:
+  - gpio
+  - uart
+  - nvs
+  - pwm
+  - entropy
+  - input
+vendor: btf
