@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Opt into CHIP's Zephyr defaults (deterministic workspace-relative path;
-# orsource with env vars silently no-ops). Two of its defaults are wrong
-# for this WiFi-only, no-OTA device and are overridden in prj.conf:
-# NET_L2_OPENTHREAD and CHIP_OTA_REQUESTOR.
+# orsource with env vars silently no-ops). Its Thread-biased defaults are
+# wrong for this WiFi-only device and are overridden in prj.conf, notably
+# NET_L2_OPENTHREAD (CHIP_OTA_REQUESTOR was one of them until OTA landed).
 rsource "../modules/connectedhomeip/config/zephyr/chip-module/Kconfig.defaults"
 
 # The ESP32 WiFi/BT drivers contribute promptless HEAP_MEM_POOL_ADD_SIZE_*
