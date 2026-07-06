@@ -38,7 +38,6 @@ target_sources(app
     src/LightingManager.cpp
     src/color_math.c
     src/led_pwm.c
-    src/rand_shim.c
     src/scaffold/main.cpp
     src/scaffold/AppTaskBase.cpp
     src/scaffold/AppTaskZephyr.cpp
@@ -48,6 +47,14 @@ target_sources(app
     # MatterPostAttributeChangeCallback and routes it to DeviceCallbacks).
     src/scaffold/DataModelCallbacks.cpp
 )
+
+# Classic ESP32 only: its WiFi blob adapter (hal_espressif esp32/esp_adapter.c)
+# defines a strong random(), colliding with picolibc's srand chain; the shim
+# keeps picolibc's random.o out of the link. The C6 adapter defines no such
+# symbol (verified against hal_espressif esp32c6/esp_adapter.c and the C6 blobs).
+if(CONFIG_SOC_SERIES_ESP32)
+    target_sources(app PRIVATE src/rand_shim.c)
+endif()
 
 # OTA Requestor glue, vendored verbatim from CHIP's examples/platform/silabs/
 # zephyr/ota_requestor (pin 9d45993e3f) so we own it alongside the rest of the

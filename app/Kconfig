@@ -6,21 +6,23 @@
 # NET_L2_OPENTHREAD (CHIP_OTA_REQUESTOR was one of them until OTA landed).
 rsource "../modules/connectedhomeip/config/zephyr/chip-module/Kconfig.defaults"
 
-# The ESP32 WiFi/BT drivers contribute promptless HEAP_MEM_POOL_ADD_SIZE_*
+# The Espressif WiFi/BT drivers contribute promptless HEAP_MEM_POOL_ADD_SIZE_*
 # defaults (40960 + 25600 on Zephyr 4.3; 4.4 raises WiFi to 51200 citing
 # real allocation failures) that set the floor of the statically-allocated
-# kernel heap — above measured need (peak ~42K with both radios active
-# and trimmed driver buffers). Kconfig takes the first default it sees, and
-# this file is parsed before the driver tree, so re-declaring the symbols
-# here lowers the floor. dram0_0_seg is 136K total; every KB counts.
-# Re-measure before trusting these numbers on a new Zephyr/hal pin.
+# kernel heap — above measured need on the classic ESP32 (peak ~42K with
+# both radios active and trimmed driver buffers). Kconfig takes the first
+# default it sees, and this file is parsed before the driver tree, so
+# re-declaring the symbols here lowers the floor. dram0_0_seg is 136K
+# total; every KB counts. Re-measure before trusting these numbers on a
+# new Zephyr/hal pin. Classic ESP32 only: the C6's unified 512K SRAM
+# doesn't need the diet, so it keeps the driver defaults (51200 + 50000).
 config HEAP_MEM_POOL_ADD_SIZE_ESP_WIFI
 	int
-	default 24576
+	default 24576 if SOC_SERIES_ESP32
 
 config HEAP_MEM_POOL_ADD_SIZE_ESP_BT
 	int
-	default 16384
+	default 16384 if SOC_SERIES_ESP32
 
 choice LEDCTRL_MODE
 	prompt "LED strip type"
