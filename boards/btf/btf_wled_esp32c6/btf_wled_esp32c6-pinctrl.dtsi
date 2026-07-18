@@ -8,18 +8,22 @@
  *
  *   silk CH1 (pad 12, was GPIO27) -> GPIO11
  *   silk CH2 (pad 11, was GPIO26) -> GPIO10
- *   silk CH3 (pad 10, was GPIO25) -> GPIO8   <-- C6 boot strap, see below
+ *   silk CH3                      -> GPIO21  <-- rewired, see below
  *   button S1 (pad 25, was GPIO0) -> GPIO9   (the C6's boot pin: same
  *                                             hold-low-for-download semantics)
  *   UART0    (pads 34/35)         -> RXD=GPIO17, TXD=GPIO16
  *
- * GPIO8 strap caveat: entering serial download mode requires GPIO8=1 while
- * GPIO9 (button) is held low through reset. GPIO8 defaults to floating and
- * this pad drives a 74HC245 buffer input, so download-mode entry is
- * unreliable unless the rework adds a pull-up on the old-IO25/CH3 net (a
- * pull-up also turns the CH3 MOSFET on while the chip is in reset  -- an
- * acceptable blink for CCT boards where CH3 is unconnected). Normal SPI
- * boot ignores GPIO8.
+ * GPIO8 strap + CH3 rework (as-built, HW-verified at bring-up 2026-07-18):
+ * the C6 boot strap needs GPIO8=1 while GPIO9 is held low through reset
+ * (datasheet Table 4-3), but GPIO8 (pad 10, old IO25/CH3 net) has no
+ * internal pull and this pad drives a 74HC245 buffer input. A 10k pull-up
+ * alone only reached ~1.7V (the '245 net loaded it down -- no discrete
+ * pull-down present), so download-mode entry was unreliable. Fix: CUT the
+ * pad-10 trace to the '245 -- GPIO8 then sits at a clean 3.3V and carries
+ * only the strap pull-up (drives nothing). That severed silk CH3, so CH3
+ * was rewired by jumpering footprint pad 19 (IO21, previously NC) to the
+ * CH3 buffer input -- hence LEDC ch2 is on GPIO21. Normal SPI boot ignores
+ * GPIO8, and the app may drive it freely after the strap-hold window.
  *
  * Channel numbering matches the classic board: LEDC ch0=CH1(cool),
  * ch1=CH2(warm), ch2=CH3, so the app's LEDCTRL_CH_* defaults hold.
@@ -46,7 +50,7 @@
 		group1 {
 			pinmux = <LEDC_CH0_GPIO11>,
 				 <LEDC_CH1_GPIO10>,
-				 <LEDC_CH2_GPIO8>;
+				 <LEDC_CH2_GPIO21>;
 			output-enable;
 		};
 	};

@@ -26,9 +26,10 @@ Pads this board actually uses:
 | 1 / 38 | GND | GND | match |
 | 2 | 3V3 | 3V3 | match (same ≥0.5 A budget, same decoupling) |
 | 3 | EN | EN | match; stock RC covers the C6's longer 3 ms strap hold |
-| 10 | IO25 = silk CH3 | **GPIO8** | **boot strap — see below** |
+| 10 | IO25 = silk CH3 | **GPIO8** | **boot strap.** As-built: trace to the '245 cut; carries only the strap pull-up (drives nothing); silk CH3 moved to pad 19. See below. |
 | 11 | IO26 = silk CH2 (warm) | GPIO10 | plain GPIO, clean |
 | 12 | IO27 = silk CH1 (cool) | GPIO11 | plain GPIO, clean |
+| 19 | NC (unused) | **GPIO21** | silk CH3 rewired here (jumper to the '245 CH3 input) after the GPIO8 trace cut; carries LEDC ch2 |
 | 25 | IO0 (button S1 + boot strap) | **GPIO9** | the C6's boot pin: identical hold-low-for-download semantics, default weak pull-up — button and DTR/RTS autoboot work unchanged |
 | 34 / 35 | RXD0 / TXD0 | RXD0 / TXD0 | UART0 aligns (software GPIO numbers become 17/16) |
 | 4 | IO36 (mic, unused) | IO4 | input-only pin becomes full I/O + ADC |
@@ -57,6 +58,18 @@ is how devkits repurposing GPIO8 as a plain GPIO (e.g. the C3-DevKitM's LED)
 still flash. So the pull-up is required for the bridge path we are keeping,
 and would become unnecessary only if the board were reworked to native-USB
 flashing.)
+
+**As-built (HW bring-up 2026-07-18):** the pull-up alone was *not* enough.
+GPIO8 measured ~1.7V — dragged toward the '245 input net (no discrete
+pull-down present), landing right on the logic threshold — so `west flash`
+could not enter download mode (`esptool: Wrong boot mode detected (0x0)`).
+Cutting the pad-10 trace to the '245 removed the load; GPIO8 then sat at a
+clean 3.3V and download-mode entry became reliable with no BOOT-button hold.
+The cut severs silk CH3, so CH3 was restored by jumpering footprint pad 19
+(IO21, previously NC) to the '245 CH3 input; the board def now drives LEDC
+ch2 on GPIO21. (This also moots the "brief CH3 blink at reset" trade-off
+above — GPIO8 no longer drives that buffer.) Net rework: 10k pull-up
+GPIO8→3V3, cut pad-10→'245, jumper pad-19→'245 CH3 input.
 
 ### Why it's two pins (this reads as arbitrary otherwise)
 
@@ -97,6 +110,30 @@ Table 4-2). The other C6 strap pins land on old input-only/unused pads with
 no conditioning on this board — MTMS/MTDI (= GPIO4/5, SDIO clock-edge
 select) and GPIO15 (JTAG source) — harmless here.
 
+## Bring-up results (2026-07-18, first power-on)
+
+First flash + boot of the reworked board. Verified working:
+- **`west flash` over the CH340 bridge, unassisted** (no BOOT-button hold),
+  after the GPIO8 trace-cut above — esptool auto-reset enters download;
+  GPIO9's DTR path is unchanged from the classic board. (ModemManager, still
+  running, is not a factor: esptool reached the chip through it.)
+- **MCUboot on RISC-V**: validates slot 0 (ECDSA-P256 / PSA verify,
+  mcuboot-patches/0001) and boots the app — answers the MCUboot open
+  question below.
+- **Zephyr 4.4.1 boots**, WiFi/coex ROM inits, and the **BLE controller
+  enables** (`esp_bt_controller_init`/`_enable` OK; BT MAC + libbtbb PHY
+  print).
+
+**Blocking issue — BLE host init panics.** `bt_enable()` → Zephyr host
+`common_init()` sends HCI_Reset (opcode 0x1003), then blocks on the
+command-complete semaphore **with IRQs already locked** → `kswap.h:98`
+"Context switching while holding lock!", FATAL ERROR 4, system halts (no
+watchdog). Root-caused to the C6 NimBLE controller's critical-section layer
+(`modules/hal/espressif/components/bt/porting/npl/zephyr/src/npl_os_zephyr.c`,
+`npl_zephyr_hw_enter`/`_exit_critical`) leaving IRQs locked across the VHCI
+send path — the classic ESP32 uses the btdm `osi_funcs` mechanism instead,
+which is why this is C6-only. No prior art found. Under investigation.
+
 ## What the C6 makes obsolete (the fun list)
 
 | Classic-ESP32 arrangement | On the C6 |
@@ -117,7 +154,8 @@ assemble (`fscsr`). Forced off in the C6 board conf; the classic ESP32
 keeps its real FPU on via its board conf.
 
 Open questions to verify at bring-up (assume no prior art — this would be
-CHIP generic-Zephyr on C6, likely another first):
+CHIP generic-Zephyr on C6, likely another first). Several now answered — see
+Bring-up results above:
 - Does the `esp_restart`-under-`irq_lock` factory-reset panic reproduce on
   C6's hal? (Different reset path; re-test before documenting.)
 - BLE is a different controller generation (`libble_app`, BLE-5 feature

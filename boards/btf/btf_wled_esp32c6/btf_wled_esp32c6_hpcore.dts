@@ -3,10 +3,11 @@
  *
  * BTF-Lighting "ESP32 WLED" controller reworked with an ESP32-C6-WROOM-1-N8
  * (8MB flash, no PSRAM) on the original WROOM-32E footprint. Three
- * MOSFET-buffered PWM channels (CH1/CH2/CH3 on the silk = GPIO11/10/8 on
- * the C6), one push button (S1, on GPIO9 = the C6 boot strap), USB-UART on
- * UART0 (GPIO16/17). See the pinctrl dtsi for the pad-mapping table and
- * the GPIO8 download-mode caveat.
+ * MOSFET-buffered PWM channels (CH1/CH2/CH3 on the silk = GPIO11/10/21 on
+ * the C6; CH3 rewired to GPIO21 during the GPIO8 strap rework), one push
+ * button (S1, on GPIO9 = the C6 boot strap), USB-UART on UART0 (GPIO16/17).
+ * See the pinctrl dtsi for the pad-mapping table and the GPIO8 strap /
+ * CH3-rework notes.
  */
 /dts-v1/;
 
@@ -58,7 +59,7 @@
 
 		pwm_led_ch3: pwm_led_3 {
 			pwms = <&ledc0 2 51200 PWM_POLARITY_NORMAL>;
-			label = "CH3 GPIO8";
+			label = "CH3 GPIO21";
 		};
 	};
 
