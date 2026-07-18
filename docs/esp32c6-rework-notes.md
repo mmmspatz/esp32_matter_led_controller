@@ -124,15 +124,23 @@ First flash + boot of the reworked board. Verified working:
   enables** (`esp_bt_controller_init`/`_enable` OK; BT MAC + libbtbb PHY
   print).
 
-**Blocking issue — BLE host init panics.** `bt_enable()` → Zephyr host
-`common_init()` sends HCI_Reset (opcode 0x1003), then blocks on the
-command-complete semaphore **with IRQs already locked** → `kswap.h:98`
-"Context switching while holding lock!", FATAL ERROR 4, system halts (no
-watchdog). Root-caused to the C6 NimBLE controller's critical-section layer
-(`modules/hal/espressif/components/bt/porting/npl/zephyr/src/npl_os_zephyr.c`,
-`npl_zephyr_hw_enter`/`_exit_critical`) leaving IRQs locked across the VHCI
-send path — the classic ESP32 uses the btdm `osi_funcs` mechanism instead,
-which is why this is C6-only. No prior art found. Under investigation.
+**RESOLVED (fixed in `hal-patches/0001`).** BLE host init panicked:
+`bt_enable()` → Zephyr host `common_init()` (HCI_Reset) blocked on its
+completion semaphore **with IRQs already locked** → `kswap.h:98` "Context
+switching while holding lock!", FATAL ERROR 4, halt. Root cause: the
+hal_espressif Zephyr-port `esp_os_*_critical*` macros
+(`components/esp_system/include/esp_private/critical_section.h`) stored the
+`irq_lock()` key in the lock word and were **not recursion-safe**. The C6 BT
+clock init nests the modem-clock lock (`ble_rtc_clk_init` →
+`modem_clock_select_lp_clock_source` → BT-only workarounds →
+`modem_clock_domain_clk_gate_*`), so the outer exit restored "locked" and left
+IRQs disabled. WiFi's path skips those workarounds — which is why WiFi worked,
+only BLE failed, and it's C6-specific. (The NimBLE npl layer, the first
+suspect, was exonerated: its counter stayed balanced throughout.) Fix: shared
+depth-counter critical section (single-core, LIFO), mirroring the npl port.
+HW-verified: no panic, full HCI init, CHIPoBLE + mDNS advertising, `Server
+Listening`, and a phone's Matter "set up device" prompt discovered the beacon.
+End-to-end BLE→WiFi commissioning still to be run on the home network.
 
 ## What the C6 makes obsolete (the fun list)
 

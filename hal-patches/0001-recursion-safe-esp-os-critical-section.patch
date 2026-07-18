@@ -1,0 +1,96 @@
+Make the esp_os_*_critical* macros recursion-safe on the single-core Zephyr port.
+
+The hal_espressif Zephyr port replaces ESP-IDF's recursive portMUX with macros
+that stash the irq_lock() key inside the lock word (*lock = irq_lock()). That is
+NOT recursion-safe: when the same lock is taken nested, the inner enter
+overwrites the saved "unlocked" key with "locked", so the OUTER exit restores
+"locked" and leaves interrupts disabled for good.
+
+The ESP32-C6 BLE controller bring-up hits exactly this:
+  esp_bt_controller_init -> ble_rtc_clk_init -> modem_clock_select_lp_clock_source
+takes the MODEM_CLOCK lock and, on the BT (not WiFi) path, calls
+modem_clock_bt_wifipwr_clk_workaround -> modem_clock_domain_clk_gate_* which
+takes the SAME lock again. Interrupts were then left disabled, and the first
+blocking k_sem_take in the BLE host (the HCI_Reset wait) panicked with
+"Context switching while holding lock!" (kswap.h). WiFi's path in the same
+function skips those workarounds -- which is why WiFi worked, only BLE failed,
+and this is C6-specific.
+
+Fix: use a shared depth counter + saved key. LIFO nesting is guaranteed for
+interrupt-disable critical sections and OS_SPINLOCK is 0 here (single core), so
+one shared {count,key} is correct -- the same approach the BLE npl port
+(npl_os_zephyr.c) already uses. Weak globals keep the header self-contained
+(one shared instance after link).
+
+Upstream candidate: yes -- affects any single-core esp Zephyr target whose
+drivers nest these critical sections.
+
+diff --git a/components/esp_system/include/esp_private/critical_section.h b/components/esp_system/include/esp_private/critical_section.h
+index 56bf11a31e..34e5bf00af 100644
+--- a/components/esp_system/include/esp_private/critical_section.h
++++ b/components/esp_system/include/esp_private/critical_section.h
+@@ -221,7 +221,18 @@ extern "C" {
+  * esp_os_exit_critical(&my_lock);
+  * @endcode
+  */
+-#define esp_os_enter_critical(lock)         do { unsigned int *_k = (unsigned int *)(lock); *_k = irq_lock(); } while(0)
++/* FIX (C6 BLE bring-up): recursion-safe single-core critical section. The
++ * upstream Zephyr-port macros stored the irq_lock() key in the lock word,
++ * which is NOT recursion-safe: nesting the same lock (C6 modem-clock BT init
++ * nests MODEM_CLOCK lock) overwrote the saved key, so the outer exit restored
++ * "locked" and left IRQs disabled -> first blocking k_sem_take panicked
++ * ("Context switching while holding lock!"). Use a shared depth counter +
++ * saved key (LIFO, single-core), mirroring the BLE npl port (npl_os_zephyr.c). */
++__attribute__((weak)) unsigned int esp_os_crit_saved_key = 0;
++__attribute__((weak)) unsigned int esp_os_crit_nesting = 0;
++#define ESP_OS_CRIT_ENTER() do { unsigned int _k = irq_lock(); if (esp_os_crit_nesting++ == 0U) { esp_os_crit_saved_key = _k; } } while (0)
++#define ESP_OS_CRIT_EXIT()  do { if (--esp_os_crit_nesting == 0U) { irq_unlock(esp_os_crit_saved_key); } } while (0)
++#define esp_os_enter_critical(lock)         do { (void)(lock); ESP_OS_CRIT_ENTER(); } while (0)
+ 
+ /**
+  * @brief Exit a critical section.
+@@ -246,7 +257,7 @@ extern "C" {
+  * esp_os_exit_critical(&my_lock);
+  * @endcode
+  */
+-#define esp_os_exit_critical(lock)          irq_unlock(*(unsigned int *)(lock))
++#define esp_os_exit_critical(lock)          do { (void)(lock); ESP_OS_CRIT_EXIT(); } while (0)
+ 
+ /**
+  * @brief Enter a critical section while from ISR.
+@@ -271,7 +282,7 @@ extern "C" {
+  * esp_os_exit_critical(&my_lock);
+  * @endcode
+  */
+-#define esp_os_enter_critical_isr(lock)     do { unsigned int *_k = (unsigned int *)(lock); *_k = irq_lock(); } while(0)
++#define esp_os_enter_critical_isr(lock)     do { (void)(lock); ESP_OS_CRIT_ENTER(); } while (0)
+ 
+ /**
+  * @brief Exit a critical section after entering from ISR.
+@@ -296,7 +307,7 @@ extern "C" {
+  * esp_os_exit_critical(&my_lock);
+  * @endcode
+  */
+-#define esp_os_exit_critical_isr(lock)      irq_unlock(*(unsigned int *)(lock))
++#define esp_os_exit_critical_isr(lock)      do { (void)(lock); ESP_OS_CRIT_EXIT(); } while (0)
+ 
+ /**
+  * @brief Enter a critical section from normal task or ISR. This macro will check if the current CPU is processing
+@@ -322,7 +333,7 @@ extern "C" {
+  * esp_os_exit_critical(&my_lock);
+  * @endcode
+  */
+-#define esp_os_enter_critical_safe(lock)    do { unsigned int *_k = (unsigned int *)(lock); *_k = irq_lock(); } while(0)
++#define esp_os_enter_critical_safe(lock)    do { (void)(lock); ESP_OS_CRIT_ENTER(); } while (0)
+ 
+ /**
+  * @brief Exit a critical section after entering via esp_os_enter_critical_safe.
+@@ -347,7 +358,7 @@ extern "C" {
+  * esp_os_exit_critical(&my_lock);
+  * @endcode
+  */
+-#define esp_os_exit_critical_safe(lock)     irq_unlock(*(unsigned int *)(lock))
++#define esp_os_exit_critical_safe(lock)     do { (void)(lock); ESP_OS_CRIT_EXIT(); } while (0)
+ 
+ #ifdef __cplusplus
+ }

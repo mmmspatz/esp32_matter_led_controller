@@ -82,6 +82,20 @@ for p in "$PWD"/mcuboot-patches/*.patch; do
         git -C bootloader/mcuboot apply "$p"
     fi
 done
+
+# Local patches to hal_espressif (west module, reset by `west update`). 0001
+# makes the esp_os_*_critical* macros recursion-safe; without it the ESP32-C6
+# BLE controller init nests the modem-clock critical section, leaves IRQs
+# disabled, and the BLE host panics on its first blocking wait ("Context
+# switching while holding lock!").
+for p in "$PWD"/hal-patches/*.patch; do
+    if git -C modules/hal/espressif apply --reverse --check "$p" 2>/dev/null; then
+        echo "hal patch already applied: $(basename "$p")"
+    else
+        echo "applying hal patch: $(basename "$p")"
+        git -C modules/hal/espressif apply "$p"
+    fi
+done
 shopt -u nullglob
 
 # CHIP's own environment (gn, ninja, zap, ...) via pigweed CIPD.

@@ -43,6 +43,12 @@ Version pins (manifest/west.yml) — do not bump casually:
   0005 `sys_multi_heap` + `Malloc::AddReclaimedRegion()` in SysHeapMalloc
   (runtime BT-DRAM reclaim; stacks on 0002), 0006 Zephyr BLE `_Shutdown`
   sets `mServiceMode = Disabled` (makes BLE strictly one-way for the reclaim).
+- `hal-patches/*.patch` (applied to `modules/hal/espressif`) re-applied the
+  same way. `hal-patches/0001` makes the port's `esp_os_*_critical*` macros
+  recursion-safe: the ESP32-C6 BLE controller init nests the modem-clock
+  critical section, and the port's non-recursive macros left IRQs disabled →
+  BLE host panic ("Context switching while holding lock!"). C6-only, but the
+  file is shared with classic ESP32 (single-core `OS_SPINLOCK 0`; safe there).
 
 ## Build / flash / monitor
 
