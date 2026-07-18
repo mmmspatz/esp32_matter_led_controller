@@ -37,9 +37,10 @@ Pads this board actually uses:
 ## The one hardware watch-item: GPIO8
 
 Serial download mode on the C6 requires **GPIO8 = 1 while GPIO9 is held
-low through reset**. GPIO8 (the old IO25/CH3 pad) has no internal pull and
-drives a 74HC245 buffer input on this board, so during reset it floats —
-download-mode entry (i.e. every `west flash`) would be unreliable.
+low through reset** (Table 4-3, ESP32-C6-WROOM-1 datasheet v1.4). GPIO8
+(the old IO25/CH3 pad) has no internal pull and drives a 74HC245 buffer
+input on this board, so during reset it floats — download-mode entry
+(i.e. every `west flash`) would be unreliable.
 
 **Recommendation: add a 10 kΩ pull-up on the old-IO25/CH3 net during
 rework.** Trade-off: the pull-up biases the buffer high while the chip is
@@ -47,11 +48,54 @@ in reset, so the CH3 MOSFET turns on briefly at power-on/reset — invisible
 on CCT boards (CH3 unconnected), a blue blink on RGB builds. A pull-down
 instead would permanently lock out UART download mode; do not. (The C6's
 USB-Serial-JTAG pads land on the old IO14/IO12 nets, so USB flashing is
-not an escape hatch on this PCB.)
+not an escape hatch on this PCB — those pins aren't routed to the USB-C
+connector without extra rework. Caveat on the strap: it governs only the
+*strap-based* download this board uses over the UART bridge. esptool over
+native USB instead triggers download via the USB-Serial-JTAG peripheral's
+force-download reset, which bypasses the GPIO8/GPIO9 strap entirely — that
+is how devkits repurposing GPIO8 as a plain GPIO (e.g. the C3-DevKitM's LED)
+still flash. So the pull-up is required for the bridge path we are keeping,
+and would become unnecessary only if the board were reworked to native-USB
+flashing.)
 
-Normal SPI boot ignores GPIO8, and the app may drive it freely after boot.
-The other C6 strap pins (GPIO4/5/15) land on old input-only/unused pads
-with no conditioning on this board — harmless.
+### Why it's two pins (this reads as arbitrary otherwise)
+
+The classic ESP32 selected download with a *single* pin, GPIO0 (internal
+pull-up → SPI boot; hold low → download), and GPIO0 was already the button.
+The C6 spreads boot mode across GPIO8 **and** GPIO9, but they are not
+coequal bits:
+
+- **GPIO9 is the real selector** (the GPIO0 analog): weak pull-up default,
+  =1 → SPI boot, =0 → download. It landed on the same button pad (pad 25),
+  so autoboot / DTR-RTS work unchanged.
+- **GPIO8 is a qualifier, not a second selector.** Its primary documented
+  job is ROM-log print control (§4.3 / Table 4-5); the boot logic reuses
+  it. That asymmetry is the whole story — from Table 4-3:
+
+  | GPIO8 | GPIO9 | Result |
+  |---|---|---|
+  | any | 1 | SPI boot |
+  | 1 | 0 | joint download boot |
+  | 0 | 0 | undocumented — not a defined mode |
+
+Two consequences fall out, and they are exactly our situation:
+1. **Normal SPI boot never depends on GPIO8** — only on GPIO9, which is
+   internally pulled up. A board leaving the pull-less GPIO8 floating still
+   boots from flash reliably; the "don't care" is deliberate, dumping all
+   the cost of the pull-less pin onto the download path.
+2. **A floating GPIO8 breaks *flashing* specifically**: when the bridge's
+   auto-reset drives GPIO9 low to request (strap-based) download, an
+   indeterminate GPIO8 can land in the undocumented 0/0 combo instead of
+   1/0 — precisely the "unreliable `west flash`" symptom the pull-up cures.
+   Strapping GPIO8 *low* is **not** a way to disable download: 0/0 is
+   undocumented (not "download off"), and real download-lockout is an eFuse
+   (`EFUSE_DIS_DOWNLOAD_MODE` / `EFUSE_DIS_USB_SERIAL_JTAG`), never a strap.
+   Straps are power-on convenience, not a security boundary.
+
+The app may drive GPIO8 freely after the 3 ms strap-hold window (t_H,
+Table 4-2). The other C6 strap pins land on old input-only/unused pads with
+no conditioning on this board — MTMS/MTDI (= GPIO4/5, SDIO clock-edge
+select) and GPIO15 (JTAG source) — harmless here.
 
 ## What the C6 makes obsolete (the fun list)
 
