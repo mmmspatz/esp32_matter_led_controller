@@ -110,6 +110,21 @@ for p in "$PWD"/hal-patches/*.patch; do
         git -C modules/hal/espressif apply "$p"
     fi
 done
+
+# Local patches to Zephyr itself (west manifest project, reset by `west update`).
+# 0001 makes the esp32 802.15.4 driver propagate TX failures: its
+# esp_ieee802154_transmit_failed callback dropped the HAL's error, so esp32_tx
+# always returned success and OpenThread never retransmitted a failed fragment
+# -> multi-fragment 6LoWPAN datagrams (SRP registration) never reassembled and
+# Matter-over-Thread commissioning stalled. Upstream candidate.
+for p in "$PWD"/zephyr-patches/*.patch; do
+    if git -C zephyr apply --reverse --check "$p" 2>/dev/null; then
+        echo "zephyr patch already applied: $(basename "$p")"
+    else
+        echo "applying zephyr patch: $(basename "$p")"
+        git -C zephyr apply "$p"
+    fi
+done
 shopt -u nullglob
 
 # CHIP's own environment (gn, ninja, zap, ...) via pigweed CIPD.

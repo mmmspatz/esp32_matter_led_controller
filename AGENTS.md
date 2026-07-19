@@ -66,6 +66,14 @@ Version pins (manifest/west.yml) — do not bump casually:
   builtin software P-256 (no `MBEDTLS_PSA_ACCEL_*` macros — they'd
   compile it out), and rare verify corner cases fall back to it.
   Details: `docs/esp32c6-rework-notes.md` "P-256 acceleration".
+- `zephyr-patches/*.patch` (applied to the `zephyr` manifest project) re-applied
+  the same way. 0001 makes the esp32 802.15.4 driver propagate TX failures:
+  `esp_ieee802154_transmit_failed` dropped the HAL's error code, so `esp32_tx`
+  always returned success and the OpenThread L2 never retransmitted a failed
+  fragment — multi-fragment 6LoWPAN datagrams (e.g. SRP registration) never
+  reassembled and Matter-over-Thread commissioning stalled. Fix mirrors the
+  nrf5 driver (record the async `tx_result`, map CCA/coex→`-EBUSY`,
+  no-ack→`-ENOMSG`, else `-EIO`). Upstream candidate (sibling of Zephyr #113666).
 
 ## Build / flash / monitor
 

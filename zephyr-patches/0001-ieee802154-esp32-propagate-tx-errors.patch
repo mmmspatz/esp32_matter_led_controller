@@ -1,0 +1,81 @@
+diff --git a/drivers/ieee802154/ieee802154_esp32.c b/drivers/ieee802154/ieee802154_esp32.c
+index b40ae5a16f4..e9907e1ee2b 100644
+--- a/drivers/ieee802154/ieee802154_esp32.c
++++ b/drivers/ieee802154/ieee802154_esp32.c
+@@ -283,6 +283,7 @@ void IRAM_ATTR esp_ieee802154_transmit_done(const uint8_t *tx_frame, const uint8
+ /* override weak function in components/ieee802154/esp_ieee802154.c of ESP-IDF */
+ void IRAM_ATTR esp_ieee802154_transmit_failed(const uint8_t *frame, esp_ieee802154_tx_error_t error)
+ {
++	esp32_data.tx_result = error;
+ 	k_sem_give(&esp32_data.tx_wait);
+ }
+ 
+@@ -306,6 +307,7 @@ static int esp32_tx(const struct device *dev, enum ieee802154_tx_mode tx_mode, s
+ 	memcpy(data->tx_psdu + 1, payload, payload_len);
+ 
+ 	k_sem_reset(&data->tx_wait);
++	data->tx_result = ESP_IEEE802154_TX_ERR_NONE;
+ 
+ 	switch (tx_mode) {
+ 	case IEEE802154_TX_MODE_DIRECT:
+@@ -341,15 +343,40 @@ static int esp32_tx(const struct device *dev, enum ieee802154_tx_mode tx_mode, s
+ 		return -ENOTSUP;
+ 	}
+ 
+-	err = k_sem_take(&data->tx_wait, K_MSEC(IEEE802154_ESP32_TX_TIMEOUT_MS));
++	if (err != 0) {
++		/* The HAL rejected the frame outright, so neither the done nor
++		 * the failed completion callback will fire. Don't wait on the
++		 * semaphore; report a transient error so the L2 retransmits.
++		 */
++		LOG_ERR("TX submit failed: %d", err);
++		return -EBUSY;
++	}
+ 
++	err = k_sem_take(&data->tx_wait, K_MSEC(IEEE802154_ESP32_TX_TIMEOUT_MS));
+ 	if (err != 0) {
+ 		LOG_ERR("TX timeout");
+-	} else {
+-		handle_ack(data);
++		return -EIO;
+ 	}
+ 
+-	return err == 0 ? 0 : -EIO;
++	/* Propagate the completion result: the errno the L2 needs to retransmit.
++	 * The Zephyr OpenThread radio shim maps -EBUSY -> CHANNEL_ACCESS_FAILURE
++	 * and -ENOMSG -> NO_ACK, both of which trigger a MAC-layer retry; other
++	 * errnos map to OT_ERROR_ABORT (no retry).
++	 */
++	switch (data->tx_result) {
++	case ESP_IEEE802154_TX_ERR_NONE:
++		return handle_ack(data);
++	case ESP_IEEE802154_TX_ERR_CCA_BUSY:
++	case ESP_IEEE802154_TX_ERR_COEXIST:
++		return -EBUSY;
++	case ESP_IEEE802154_TX_ERR_NO_ACK:
++	case ESP_IEEE802154_TX_ERR_INVALID_ACK:
++		return -ENOMSG;
++	case ESP_IEEE802154_TX_ERR_ABORT:
++	case ESP_IEEE802154_TX_ERR_SECURITY:
++	default:
++		return -EIO;
++	}
+ }
+ 
+ static int esp32_start(const struct device *dev)
+diff --git a/drivers/ieee802154/ieee802154_esp32.h b/drivers/ieee802154/ieee802154_esp32.h
+index 7f718cb03b5..395251e5e87 100644
+--- a/drivers/ieee802154/ieee802154_esp32.h
++++ b/drivers/ieee802154/ieee802154_esp32.h
+@@ -29,6 +29,11 @@ struct ieee802154_esp32_data {
+ 	 */
+ 	struct k_sem tx_wait;
+ 
++	/* Result of the last transmission, set by the transmit_done /
++	 * transmit_failed callbacks before they post tx_wait.
++	 */
++	esp_ieee802154_tx_error_t tx_result;
++
+ 	/* TX buffer. First byte is PHR (length), remaining bytes are
+ 	 * MPDU data.
+ 	 */
