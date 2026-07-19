@@ -190,6 +190,15 @@ void chip::Zephyr::App::AppTaskBase::InitServer(intptr_t arg)
     // into the CodegenDataModelProvider registry set up above.
     VerifyOrDie(sNetworkCommissioningInstance.Init() == CHIP_NO_ERROR);
 #endif
+#if CONFIG_NET_L2_OPENTHREAD
+    // Same constraint as the WiFi instance above: InstanceAndDriver::Init()
+    // registers into the CodegenDataModelProvider registry Server::Init() just
+    // built, so it runs here (Matter thread, post-Server::Init), NOT in
+    // AppTaskBase::Init() where upstream places it. ThreadStackMgr was already
+    // brought up in Init() before the event loop (this InitServer) runs, so the
+    // GenericThreadDriver has its stack.
+    VerifyOrDie(sThreadNetworkDriver.Init() == CHIP_NO_ERROR);
+#endif
 
     GetAppTask().PostInitMatterServerInstance();
     ChipLogDetail(DeviceLayer, "finishing init");
@@ -271,7 +280,15 @@ CHIP_ERROR chip::Zephyr::App::AppTaskBase::Init()
         ChipLogError(DeviceLayer, "Error during ThreadStackMgr().InitThreadStack()");
         return err;
     }
-    VerifyOrDie(sThreadNetworkDriver.Init() == CHIP_NO_ERROR);
+    // NOTE(ledctrl): sThreadNetworkDriver.Init() is deliberately NOT called here.
+    // InstanceAndDriver::Init() -> Instance::Init() ends in
+    // CodegenDataModelProvider::Instance().Registry().Register(...), which only
+    // works once Server::Init() has built that registry. Upstream calls it here,
+    // on the app thread before InitServer/Server::Init runs -- the same ordering
+    // bug the WiFi sNetworkCommissioningInstance was moved for. We register it in
+    // InitServer() after Server::Init() instead (see the WiFi/Thread blocks
+    // there); otherwise the NetworkCommissioning cluster has no command handlers
+    // and commissioning's network-config step silently no-ops.
 
     err = ConnectivityMgr().SetThreadDeviceType(ConnectivityManager::CONFIG_THREAD_DEVICE_TYPE);
     if (err != CHIP_NO_ERROR)

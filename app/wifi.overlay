@@ -1,0 +1,19 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Devicetree overlay for the C6 WiFi build variant (pairs with wifi.conf).
+ * The board DTS defaults to Thread (ieee802154 = okay, wifi = disabled); flip
+ * them back for a WiFi build. Disabling the ieee802154 node clears
+ * DT_HAS_ESPRESSIF_ESP32_IEEE802154_ENABLED so the 802.15.4 driver is not
+ * built. The board's `zephyr,ieee802154` chosen entry is left pointing at the
+ * now-disabled node -- harmless, since the OpenThread platform radio that
+ * consumes it is not compiled when NET_L2_OPENTHREAD is off.
+ */
+
+&wifi {
+	status = "okay";
+};
+
+&ieee802154 {
+	status = "disabled";
+};

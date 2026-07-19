@@ -11,10 +11,110 @@ config FPU
 	bool
 	default n if !CPU_HAS_FPU
 
+# --- Matter operational transport: WiFi vs Thread (build-time) -------------
+# The one 2.4 GHz radio can be WiFi OR 802.15.4 as the operational network,
+# not both; BLE stays for commissioning either way. Thread is C6-only -- the
+# classic ESP32-WROOM-32E has no 802.15.4 radio. Modeled like LEDCTRL_MODE
+# (CCT/RGB): a Kconfig choice whose transport-conditional re-defaults are
+# declared HERE, before the chip-module rsource and Kconfig.zephyr, so "first
+# satisfied default wins" overrides the upstream defaults with no
+# conflicting-value warnings (these are conditional defaults, not =y/=n
+# assignments -- an inactive branch leaves the upstream default in place).
+choice LEDCTRL_TRANSPORT
+	prompt "Matter operational transport"
+	default LEDCTRL_TRANSPORT_THREAD if SOC_SERIES_ESP32C6
+	default LEDCTRL_TRANSPORT_WIFI
+
+config LEDCTRL_TRANSPORT_WIFI
+	bool "WiFi (station)"
+
+config LEDCTRL_TRANSPORT_THREAD
+	bool "Thread (802.15.4)"
+	depends on SOC_SERIES_ESP32C6
+	help
+	  Matter-over-Thread: the OpenThread FTD stack over the esp32 802.15.4
+	  radio. Requires the ieee802154 devicetree node enabled -- the C6 board
+	  DTS does so by default; the wifi.conf/wifi.overlay variant flips back
+	  to WiFi.
+
+endchoice
+
+# WiFi transport: the CHIP WiFi command set + the Zephyr WiFi driver, plus the
+# neighbor-discovery / stats bits CHIP's WiFiManager (router solicitation) and
+# DiagnosticDataProviderImplWiFi need. chip-module's Kconfig.defaults disables
+# these (its Thread bias); re-enable them only for the WiFi transport.
+config CHIP_WIFI
+	default y if LEDCTRL_TRANSPORT_WIFI
+	default n
+
+config CHIP_ENABLE_WIFI_STATION
+	default y if LEDCTRL_TRANSPORT_WIFI
+
+config WIFI
+	default y if LEDCTRL_TRANSPORT_WIFI
+	default n
+
+config NET_IPV6_NBR_CACHE
+	default y if LEDCTRL_TRANSPORT_WIFI
+
+config NET_IPV6_ND
+	default y if LEDCTRL_TRANSPORT_WIFI
+
+config NET_STATISTICS
+	default y if LEDCTRL_TRANSPORT_WIFI
+
+config NET_STATISTICS_WIFI
+	default y if LEDCTRL_TRANSPORT_WIFI
+
+config NET_STATISTICS_USER_API
+	default y if LEDCTRL_TRANSPORT_WIFI
+
+# Thread transport: NET_L2_OPENTHREAD selects OPENTHREAD + the 802.15.4 subsys
+# (the esp32 radio driver auto-enables from the DT node). The NXP Thread
+# defaults are inactive on this SoC (chip-module's Kconfig.defaults wraps them
+# in `if SOC_FAMILY_NXP_RW`), so the FTD-correct options are set explicitly --
+# the base OpenThread defaults (SLAAC off, Thread 1.1, MANUAL_START off) are
+# wrong for Matter.
+config NET_L2_OPENTHREAD
+	default y if LEDCTRL_TRANSPORT_THREAD
+	default n
+
+config CHIP_OPENTHREAD_FTD
+	default y if LEDCTRL_TRANSPORT_THREAD
+
+# Matter commits the commissioned Operational Dataset and starts Thread
+# itself; without manual start the L2 auto-attaches to a default network
+# (~28 s stall before Matter takes over).
+config OPENTHREAD_MANUAL_START
+	default y if LEDCTRL_TRANSPORT_THREAD
+
+# Form an off-mesh-routable (OMR/GUA) address from the border router's on-mesh
+# prefix -- Matter operational traffic routed through the BR needs it.
+config OPENTHREAD_SLAAC
+	default y if LEDCTRL_TRANSPORT_THREAD
+
+# BLE (commissioning) + 802.15.4 (operational) share the one 2.4 GHz radio;
+# software coexistence arbitrates them during the commissioning->Thread
+# handoff. The SoC already defaults this y for IEEE802154_ESP32 && BT_ESP32
+# (zephyr/soc/espressif/common/Kconfig); pin it to intent.
+config ESP32_SW_COEXIST_ENABLE
+	default y if LEDCTRL_TRANSPORT_THREAD && BT
+
+# Router-eligible FTD (mains-powered, not a sleepy MTD) and Thread 1.4 (Matter
+# expects 1.3+; base OpenThread default is 1.1). Named choices re-opened to add
+# a transport-conditional default, parsed before the upstream definition so it
+# wins. (OPENTHREAD_DEVICE_TYPE already defaults to FTD as its first member, so
+# only CHIP_OPENTHREAD_FTD above needs pinning for the GN arg; the version
+# choice genuinely needs the bump.)
+choice OPENTHREAD_STACK_VERSION
+	default OPENTHREAD_THREAD_VERSION_1_4 if LEDCTRL_TRANSPORT_THREAD
+endchoice
+# ---------------------------------------------------------------------------
+
 # Opt into CHIP's Zephyr defaults (deterministic workspace-relative path;
 # orsource with env vars silently no-ops). Its Thread-biased defaults are
-# wrong for this WiFi-only device and are overridden in prj.conf, notably
-# NET_L2_OPENTHREAD (CHIP_OTA_REQUESTOR was one of them until OTA landed).
+# overridden above per the selected LEDCTRL_TRANSPORT (notably
+# NET_L2_OPENTHREAD, which chip-module defaults y).
 rsource "../modules/connectedhomeip/config/zephyr/chip-module/Kconfig.defaults"
 
 # The Espressif WiFi/BT drivers contribute promptless HEAP_MEM_POOL_ADD_SIZE_*
