@@ -161,10 +161,8 @@ device-side). Caveats found, all worth hardening:
   session and won't trigger this, but a stuck half-open handshake blocking new
   ones for ~62 s is a robustness gap.
 - **CASE crypto is software.** Sigma2 ≈ 398 ms (P-256, NIST_OPTIM). The C6
-  *does* have an ECC (+MPI) accelerator (`SOC_ECC_SUPPORTED=1`), and Espressif
-  ships a PSA ECDSA driver — but only in the ESP-IDF mbedTLS port, not Zephyr's
-  tf-psa-crypto that we build against, so it goes unused. Wiring it in is a
-  real latency win (see the P-256 row below) but a non-trivial PSA-driver port.
+  has ECC/MPI accelerators, but no path in our stack reaches them — see
+  "P-256 acceleration groundwork" below for the inventory and the port plan.
 - **Heaps use upstream defaults; on-hardware peaks confirm that's ample.**
   Measured with the `chip_heap` shell command (`Malloc::GetStats`,
   `app/src/HeapStatsShell.cpp`) and `kernel heap`: the CHIP sys_heap
@@ -173,6 +171,57 @@ device-side). Caveats found, all worth hardening:
   (CHIP's big pools are static `.bss`; OTA streams to flash). The kernel radio
   pool peaks ~64 KB. Both sit well under the chip-module 12 KB / stock
   radio-pool defaults, so the C6 overrides neither.
+
+### P-256 acceleration groundwork (crypto-path investigation, 2026-07-18)
+
+All of Matter's crypto on the C6 runs in software — P-256, SHA-256, AES-CCM;
+the only hardware in the PSA chain is the TRNG (`MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG`
+→ Zephyr entropy → `ENTROPY_ESP32_RNG`). What the silicon offers and how to
+reach it (all paths verified in the pinned trees):
+
+- **Silicon**: an ECC accelerator (`SOC_ECC_SUPPORTED`) doing P-192/P-256
+  point-mul and point-on-curve checks only — no point-add, and constant-time
+  point-mul is unsupported on C6 (`ecc_ll.h`) — plus an MPI bignum unit
+  (`SOC_MPI_SUPPORTED`). There is **no** dedicated ECDSA peripheral
+  (`SOC_ECDSA_SUPPORTED` is H2/P4/C5-class).
+- **Nothing in the stack reaches it.** Three near-misses, each a dead end:
+  - Espressif's IDF integration for ECC-only chips overrides
+    `MBEDTLS_ECP_MUL_ALT` (`port/ecc/ecc_alt.c`); the `*_ALT` hooks were
+    removed wholesale in mbedTLS 4.x.
+  - Espressif's PSA ECDSA driver (`port/psa_driver/esp_ecdsa/`) is gated
+    `#if SOC_ECDSA_SUPPORTED`, signs via opaque eFuse keys, and its wrapper
+    hookup lives in Espressif's mbedTLS fork, not in hal_espressif.
+  - Zephyr's `crypto_esp32_{sha,aes}.c` drivers implement Zephyr's native
+    crypto-subsystem API, which has no bridge to mbedTLS/PSA (and
+    `CONFIG_CRYPTO_ESP32` isn't in our build anyway).
+- **The route is a TF-PSA-Crypto transparent driver** — the only sanctioned
+  acceleration path in the mbedTLS-4 world, and nobody upstream is building
+  it for ESP32 (no PSA-driver work in Zephyr, TF-PSA-Crypto, or
+  hal_espressif; every vendor doing PSA hardware accel carries downstream
+  glue). Shape, modeled on the in-tree p256-m driver
+  (`drivers/p256-m/p256-m_driver_entrypoints.c`):
+  - ~80-line bootstrap-applied patch adding dispatch cases to the checked-in
+    `core/psa_crypto_driver_wrappers.h` (sign_hash / key_agreement /
+    generate_key). **Fallback-style dispatch, no `MBEDTLS_PSA_ACCEL_*`
+    macros** — those compile out the builtin P-256 that the SPAKE2+ mbedTLS
+    fallback (`mbedtls_ecp_mul` in CHIPCryptoPALPSA) links against.
+  - ~500-line app-side driver: p256-m-shaped entry points over hal's
+    `esp_ecc.c`/`ecc_hal.c` (~460 lines; not built by the hal's Zephyr glue —
+    compile them from app CMake), a k_mutex supplying the missing
+    `esp_crypto_ecc_lock_*`, clock-enable via `ecc_ll_enable_bus_clock`/
+    `_reset_register`/`_power_up`. Enable macros injected via
+    `CONFIG_TF_PSA_CRYPTO_USER_CONFIG_FILE`; zero Zephyr or CHIP patches
+    (CHIPCryptoPALPSA's `psa_*` calls, and its LOCAL_STORAGE keys, dispatch
+    through the transparent-driver arm automatically).
+  - Math split: **ECDH is a pure HW win** (the bulk of Sigma latency).
+    ECDSA sign = HW k·G + software mod-n for r/s. Verify needs the
+    point-add the engine lacks — return NOT_SUPPORTED and let the builtin
+    handle it. Blind private scalars (no constant-time mode in HW).
+  - Keys arrive in PSA export format (big-endian scalar / uncompressed
+    point); the HW wants little-endian — the ~10-line swap `ecc_alt.c`
+    demonstrates.
+- A PSA SHA-256 driver over `esp_sha` would be a second, independent win
+  via the same wrapper mechanism (CASE/attestation hash heavily).
 
 ## What the C6 makes obsolete (the fun list)
 
@@ -184,7 +233,7 @@ device-side). Caveats found, all worth hardening:
 | WiFi driver buffer trims, AMPDU off, `MBEDTLS_PSA_KEY_SLOT_COUNT=32`, 40K CHIP heap | Stock defaults; CHIP heap uses chip-module's 12K default (measured peak ~8K). |
 | `rand_shim.c` (WiFi blob's strong `random()` vs picolibc) | Not needed: the C6 hal adapter/blobs export no `random`/`rand`/`srand` (verified with nm + source grep). Now compiled only for `SOC_SERIES_ESP32`. |
 | 4 MB flash, 1856K slots (Matter barely fits) | 8 MB, 3840K slots (`dts/btf/partitions_btf_8M.dtsi`, sys partition dropped, boot at 0x0). |
-| Slow software P-256 (`MBEDTLS_ECP_NIST_OPTIM` load-bearing) | Still software, but not for lack of silicon: the C6 *has* an ECC (+MPI) accelerator (`SOC_ECC_SUPPORTED=1`). Only its SHA/AES accelerators are wired into Zephyr's crypto, and Espressif's ESP ECC PSA driver targets the ESP-IDF mbedTLS port, not the tf-psa-crypto we build against — so P-256 stays software. Keep `NIST_OPTIM` (common prj.conf). Measured Sigma2 ≈ 398 ms (2026-07-18); wiring the ECC accel into a tf-psa-crypto PSA driver is the real CASE-latency lever. |
+| Slow software P-256 (`MBEDTLS_ECP_NIST_OPTIM` load-bearing) | Still software — as is all of Matter's crypto on the C6 (P-256, SHA-256, AES-CCM; the only hardware in the PSA chain is the TRNG). The silicon exists but nothing bridges it into tf-psa-crypto; the lever is a PSA transparent driver over the ECC accelerator — see "P-256 acceleration groundwork" above. Keep `NIST_OPTIM` (common prj.conf). Measured Sigma2 ≈ 398 ms (2026-07-18). |
 
 ### RAM note
 
