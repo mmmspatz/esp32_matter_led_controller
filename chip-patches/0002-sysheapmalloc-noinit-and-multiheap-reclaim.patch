@@ -1,38 +1,25 @@
-Give the CHIP sys_heap allocator a second, runtime-added heap bank.
-
-Converts the single sys_heap behind malloc/free into a sys_multi_heap so a
-region discovered at runtime can be handed to the allocator after boot. A
-choice callback keeps the existing buffer as the primary bank and spills into
-the added bank only when the primary is exhausted; sys_multi_heap tracks bank
-ownership so free/realloc route to the correct backend, and GetStats folds in
-both banks (maxUsed becomes an upper bound).
-
-The motivating use is the ESP32 port, where the Bluetooth controller's
-CONFIG_ESP32_BT_RESERVE_DRAM region (~54.8 KiB) is dead weight once BLE-based
-commissioning is done; after bt_disable() the application calls
-Malloc::AddReclaimedRegion() to donate that window to the heap. The mechanism
-itself is platform-agnostic.
-
-Stacks on 0002 (which only relocates the primary buffer to .noinit).
-Requires CONFIG_MULTI_HEAP=y.
-
-Upstream candidate: yes (generically useful; no ESP32 specifics here).
-
 diff --git a/src/platform/Zephyr/SysHeapMalloc.cpp b/src/platform/Zephyr/SysHeapMalloc.cpp
-index 371addc014..c5a29bc14c 100644
+index 7c057ac8ea..c5a29bc14c 100644
 --- a/src/platform/Zephyr/SysHeapMalloc.cpp
 +++ b/src/platform/Zephyr/SysHeapMalloc.cpp
-@@ -24,6 +24,7 @@ extern "C" {
+@@ -22,7 +22,9 @@
+ 
+ extern "C" {
  #include <zephyr/init.h>
- #include <zephyr/linker/section_tags.h>
++#include <zephyr/linker/section_tags.h>
  #include <zephyr/sys/math_extras.h>
 +#include <zephyr/sys/multi_heap.h>
  #include <zephyr/sys/mutex.h>
  #include <zephyr/sys/sys_heap.h>
  }
-@@ -43,6 +44,16 @@ constexpr size_t kMallocAlignment = alignof(long long);
- // out of the starved primary DRAM bank into the noinit-only second bank.
- uint8_t __noinit sHeapMemory[CONFIG_CHIP_MALLOC_SYS_HEAP_SIZE] alignas(kMallocAlignment);
+@@ -38,8 +40,20 @@ namespace {
+ // Choose the value that guarantees that the returned memory blocks are castable to all built-in types.
+ constexpr size_t kMallocAlignment = alignof(long long);
+ 
+-uint8_t sHeapMemory[CONFIG_CHIP_MALLOC_SYS_HEAP_SIZE] alignas(kMallocAlignment);
++// __noinit: a heap needs no zero-init, and on ESP32 this moves the buffer
++// out of the starved primary DRAM bank into the noinit-only second bank.
++uint8_t __noinit sHeapMemory[CONFIG_CHIP_MALLOC_SYS_HEAP_SIZE] alignas(kMallocAlignment);
  sys_heap sHeap;
 +
 +// A second heap bank populated at runtime by AddReclaimedRegion() once a region
@@ -47,7 +34,7 @@ index 371addc014..c5a29bc14c 100644
  SYS_MUTEX_DEFINE(sLock);
  
  // RAII helper for synchronizing access to the common heap.
-@@ -67,9 +78,32 @@ LockGuard::~LockGuard()
+@@ -64,9 +78,32 @@ LockGuard::~LockGuard()
      }
  }
  
@@ -80,7 +67,7 @@ index 371addc014..c5a29bc14c 100644
      return 0;
  }
  
-@@ -87,7 +121,7 @@ void * Malloc(size_t size)
+@@ -84,7 +121,7 @@ void * Malloc(size_t size)
  {
      LockGuard lockGuard;
  
@@ -89,7 +76,7 @@ index 371addc014..c5a29bc14c 100644
  }
  
  void * Calloc(size_t num, size_t size)
-@@ -113,7 +147,7 @@ void * Realloc(void * mem, size_t size)
+@@ -110,7 +147,7 @@ void * Realloc(void * mem, size_t size)
  {
      LockGuard lockGuard;
  
@@ -98,7 +85,7 @@ index 371addc014..c5a29bc14c 100644
  }
  
  void Free(void * mem)
-@@ -121,7 +155,30 @@ void Free(void * mem)
+@@ -118,7 +155,30 @@ void Free(void * mem)
      LockGuard lockGuard;
  
      VerifyOrReturn(lockGuard.Locked());
@@ -130,7 +117,7 @@ index 371addc014..c5a29bc14c 100644
  }
  
  #ifdef CONFIG_SYS_HEAP_RUNTIME_STATS
-@@ -138,12 +195,27 @@ CHIP_ERROR GetStats(Stats & stats)
+@@ -135,12 +195,27 @@ CHIP_ERROR GetStats(Stats & stats)
      stats.used    = sysHeapStats.allocated_bytes;
      stats.maxUsed = sysHeapStats.max_allocated_bytes;
  

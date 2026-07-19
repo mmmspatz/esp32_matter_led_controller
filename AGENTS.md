@@ -38,19 +38,34 @@ Version pins (manifest/west.yml) — do not bump casually:
   `platform/Zephyr` uses BLE flags removed in Zephyr 4.x. This pin has
   the mbedTLS-4 include guards, #72416).
 - `chip-patches/*.patch` are re-applied by bootstrap after every
-  `west update`. Current set: 0002 `__noinit` heap placement
-  (ESP32-specific, load-bearing), 0003 NXP Kconfig.defaults legacy
+  `west update`. Current set: 0002 SysHeapMalloc `__noinit` heap placement
+  (ESP32-specific, load-bearing) + `sys_multi_heap`/`AddReclaimedRegion()`
+  (runtime BT-DRAM reclaim), 0003 NXP Kconfig.defaults legacy
   mbedTLS symbols (fatal typeless defaults under 4.4), 0004 skip
   add_entropy_source under CHIP_CRYPTO_PSA (boot fails 0x6C without),
-  0005 `sys_multi_heap` + `Malloc::AddReclaimedRegion()` in SysHeapMalloc
-  (runtime BT-DRAM reclaim; stacks on 0002), 0006 Zephyr BLE `_Shutdown`
-  sets `mServiceMode = Disabled` (makes BLE strictly one-way for the reclaim).
+  0006 Zephyr BLE `_Shutdown` sets `mServiceMode = Disabled` (makes BLE
+  strictly one-way for the reclaim). One patch per touched area, no
+  stacking: bootstrap's per-patch reverse-check is the idempotence test,
+  and a patch whose context another patch rewrites can neither
+  reverse-check nor re-apply — under `set -e` that kills bootstrap
+  (this happened; 0005 stacked on 0002 until they were merged).
 - `hal-patches/*.patch` (applied to `modules/hal/espressif`) re-applied the
   same way. `hal-patches/0001` makes the port's `esp_os_*_critical*` macros
   recursion-safe: the ESP32-C6 BLE controller init nests the modem-clock
   critical section, and the port's non-recursive macros left IRQs disabled →
   BLE host panic ("Context switching while holding lock!"). C6-only, but the
   file is shared with classic ESP32 (single-core `OS_SPINLOCK 0`; safe there).
+- `tf-psa-crypto-patches/*.patch` (applied to `modules/crypto/tf-psa-crypto`)
+  re-applied the same way. 0001 adds ESP-ECC dispatch blocks to the
+  checked-in generated PSA driver wrappers, enabling the C6 P-256
+  hardware driver (`app/src/crypto/`, `CONFIG_LEDCTRL_PSA_ESP_ECC_DRIVER`;
+  Sigma2 398→~170 ms, Sigma3 963→~320 ms). Inert unless the app build
+  defines `MBEDTLS_PSA_ESP_ECC_DRIVER_ENABLED` — via
+  `zephyr_compile_definitions`, deliberately NOT Kconfig/autoconf.h,
+  which would leak into CHIP's GN build and break it. SPAKE2+ stays on
+  builtin software P-256 (no `MBEDTLS_PSA_ACCEL_*` macros — they'd
+  compile it out), and rare verify corner cases fall back to it.
+  Details: `docs/esp32c6-rework-notes.md` "P-256 acceleration".
 
 ## Build / flash / monitor
 
@@ -81,6 +96,16 @@ Per-board app config lives in `app/boards/<board>_<qualifiers>.conf`
 classic-ESP32 RAM diet is in `btf_wled_esp32_esp32_procpu.conf`, C6
 sizing in `btf_wled_esp32c6_esp32c6_hpcore.conf`. prj.conf stays
 SoC-portable.
+
+Stale build dirs lie after config restructuring: the set of merged conf
+files (board conf, EXTRA_CONF_FILE, sysbuild overlays) is discovered at
+configure time and cached, so a build dir created before a conf file
+existed keeps building without it — the failure is silent and the
+resulting `.config` contradicts the files on disk (observed: classic
+image linked minus its entire RAM diet, a ~60K dram0 overflow). After
+adding/renaming/moving any `*.conf`, rebuild with `-p always`, and pass
+`-b` explicitly — pristining wipes the cached board and
+`west config build.board` defaults to the C6.
 
 Serial console: 115200 on /dev/ttyUSB0. Flashing does NOT touch the
 storage partition: fabrics, WiFi credentials and provisioning survive.

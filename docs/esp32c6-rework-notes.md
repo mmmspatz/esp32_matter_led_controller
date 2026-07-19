@@ -160,9 +160,10 @@ device-side). Caveats found, all worth hardening:
   ~62 s back-off (`CHIP Error 0xDB`). A persistent controller (HA) keeps one
   session and won't trigger this, but a stuck half-open handshake blocking new
   ones for ~62 s is a robustness gap.
-- **CASE crypto is software.** Sigma2 ≈ 398 ms (P-256, NIST_OPTIM). The C6
-  has ECC/MPI accelerators, but no path in our stack reaches them — see
-  "P-256 acceleration groundwork" below for the inventory and the port plan.
+- **CASE P-256 is hardware-accelerated** (2026-07-18, same day as this
+  bring-up): Sigma2 generation 398 ms → ~170 ms and Sigma3 processing
+  963 ms → ~320 ms via the ECC-engine PSA driver — see "P-256
+  acceleration" below. Device handshake compute overall: ~1.36 s → ~0.5 s.
 - **Heaps use upstream defaults; on-hardware peaks confirm that's ample.**
   Measured with the `chip_heap` shell command (`Malloc::GetStats`,
   `app/src/HeapStatsShell.cpp`) and `kernel heap`: the CHIP sys_heap
@@ -172,12 +173,37 @@ device-side). Caveats found, all worth hardening:
   pool peaks ~64 KB. Both sit well under the chip-module 12 KB / stock
   radio-pool defaults, so the C6 overrides neither.
 
-### P-256 acceleration groundwork (crypto-path investigation, 2026-07-18)
+### P-256 acceleration (investigated and shipped 2026-07-18)
 
-All of Matter's crypto on the C6 runs in software — P-256, SHA-256, AES-CCM;
-the only hardware in the PSA chain is the TRNG (`MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG`
-→ Zephyr entropy → `ENTROPY_ESP32_RNG`). What the silicon offers and how to
-reach it (all paths verified in the pinned trees):
+**Implemented**: `LEDCTRL_PSA_ESP_ECC_DRIVER` (default y on C6) registers a
+PSA transparent driver (`app/src/crypto/`, dispatch hook
+`tf-psa-crypto-patches/0001`) that feeds P-256 point multiplication to the
+ECC engine. HW-verified end-to-end: chip-tool CASE + cluster control on the
+driver build, Sigma2 generation **398 ms → ~170 ms** and Sigma3 processing
+**963 ms → ~320 ms** (device-side log timestamps, multiple samples) — the
+device's per-handshake compute drops ~1.36 s → ~0.5 s. Covered: ECDH (with
+the engine's fused on-curve peer-key check), ECDSA sign (HW k·G + blinded
+software mod-n for r/s), ECDSA verify (HW u1·G and u2·Q + one software
+affine addition, x-coordinate only; the measure-zero corner cases return
+NOT_SUPPORTED and fall through to the builtin), public-key derivation
+(HW d·G), and key generation (pure RNG — PSA stores only the scalar, so it
+skips even the builtin's software d·G). Remaining Sigma3 cost is dominated
+by the two `mbedtls_mpi_inv_mod` calls per verify (s⁻¹ mod n, point-add
+denominator mod p) — binary extended GCD on rv32; if it ever needs to
+shrink further, the C6's MPI mod-exp block could do Fermat inversion (v3).
+The enable macro travels via `zephyr_compile_definitions`, NOT
+Kconfig/user-config-file — anything in autoconf.h or the TF-PSA-Crypto
+config chain leaks into CHIP's GN build, whose include dirs are snapshotted
+before app CMake runs (build failure). Side-channel posture: the C6 engine
+has no constant-time mode; secret scalars crossing it are one-shot
+(ephemerals, nonces), matching Espressif's own ESP-IDF posture on this
+chip; the verify path is public-values-only.
+
+Background from the investigation (why this shape): everything else in
+Matter's crypto on the C6 remains software — SHA-256, AES-CCM; the only
+other hardware in the PSA chain is the TRNG (`MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG`
+→ Zephyr entropy → `ENTROPY_ESP32_RNG`). What the silicon offers and why
+the alternatives were dead ends (all verified in the pinned trees):
 
 - **Silicon**: an ECC accelerator (`SOC_ECC_SUPPORTED`) doing P-192/P-256
   point-mul and point-on-curve checks only — no point-add, and constant-time
@@ -194,32 +220,25 @@ reach it (all paths verified in the pinned trees):
   - Zephyr's `crypto_esp32_{sha,aes}.c` drivers implement Zephyr's native
     crypto-subsystem API, which has no bridge to mbedTLS/PSA (and
     `CONFIG_CRYPTO_ESP32` isn't in our build anyway).
-- **The route is a TF-PSA-Crypto transparent driver** — the only sanctioned
-  acceleration path in the mbedTLS-4 world, and nobody upstream is building
-  it for ESP32 (no PSA-driver work in Zephyr, TF-PSA-Crypto, or
-  hal_espressif; every vendor doing PSA hardware accel carries downstream
-  glue). Shape, modeled on the in-tree p256-m driver
-  (`drivers/p256-m/p256-m_driver_entrypoints.c`):
-  - ~80-line bootstrap-applied patch adding dispatch cases to the checked-in
-    `core/psa_crypto_driver_wrappers.h` (sign_hash / key_agreement /
-    generate_key). **Fallback-style dispatch, no `MBEDTLS_PSA_ACCEL_*`
-    macros** — those compile out the builtin P-256 that the SPAKE2+ mbedTLS
-    fallback (`mbedtls_ecp_mul` in CHIPCryptoPALPSA) links against.
-  - ~500-line app-side driver: p256-m-shaped entry points over hal's
-    `esp_ecc.c`/`ecc_hal.c` (~460 lines; not built by the hal's Zephyr glue —
-    compile them from app CMake), a k_mutex supplying the missing
-    `esp_crypto_ecc_lock_*`, clock-enable via `ecc_ll_enable_bus_clock`/
-    `_reset_register`/`_power_up`. Enable macros injected via
-    `CONFIG_TF_PSA_CRYPTO_USER_CONFIG_FILE`; zero Zephyr or CHIP patches
-    (CHIPCryptoPALPSA's `psa_*` calls, and its LOCAL_STORAGE keys, dispatch
-    through the transparent-driver arm automatically).
-  - Math split: **ECDH is a pure HW win** (the bulk of Sigma latency).
-    ECDSA sign = HW k·G + software mod-n for r/s. Verify needs the
-    point-add the engine lacks — return NOT_SUPPORTED and let the builtin
-    handle it. Blind private scalars (no constant-time mode in HW).
-  - Keys arrive in PSA export format (big-endian scalar / uncompressed
-    point); the HW wants little-endian — the ~10-line swap `ecc_alt.c`
-    demonstrates.
+- **A TF-PSA-Crypto transparent driver is the only sanctioned route** in
+  the mbedTLS-4 world, and nobody upstream is building one for ESP32 (no
+  PSA-driver work in Zephyr, TF-PSA-Crypto, or hal_espressif; every vendor
+  doing PSA hardware accel carries downstream glue). Ours is modeled on the
+  in-tree p256-m driver (`drivers/p256-m/p256-m_driver_entrypoints.c`):
+  dispatch blocks in the checked-in `core/psa_crypto_driver_wrappers.h` +
+  `..._no_static.c` (sign_hash / generate_key / key_agreement /
+  export_public_key), **fallback-style, no `MBEDTLS_PSA_ACCEL_*` macros**
+  — those would compile out the builtin P-256 that the SPAKE2+ mbedTLS
+  fallback (`mbedtls_ecp_mul` in CHIPCryptoPALPSA) links against. The
+  entry points sit on hal's `esp_ecc.c`/`ecc_hal.c` (not built by the
+  hal's Zephyr glue — compiled from app CMake) with a k_mutex supplying
+  the missing `esp_crypto_ecc_lock_*` and PCR clock-enable via `ecc_ll_*`
+  (`esp_crypto_shims.c`). Keys arrive in PSA export format (big-endian);
+  the engine wants little-endian — same swap `ecc_alt.c` does. Zero
+  Zephyr or CHIP patches: CHIPCryptoPALPSA's `psa_*` calls, and its
+  LOCAL_STORAGE keys (volatile session keys and the ITS-backed
+  operational keystore alike), dispatch through the transparent-driver
+  arm automatically.
 - A PSA SHA-256 driver over `esp_sha` would be a second, independent win
   via the same wrapper mechanism (CASE/attestation hash heavily).
 
@@ -228,12 +247,12 @@ reach it (all paths verified in the pinned trees):
 | Classic-ESP32 arrangement | On the C6 |
 |---|---|
 | Split DRAM banks, dram0 at 99.7%, `__noinit` heap relocation (chip-patches/0002), `ESP32_REGION_1_NOINIT` pin | Gone: single unified 512K HP-SRAM bank. Patch 0002 stays for the old board but is inert on C6 (`__noinit` just lands in the same bank). |
-| 56K BT-controller DRAM reserve + post-commissioning reclaim (chip-patches/0005/0006, `LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING`) | Gone: no linker carve-out exists on C6 (BT memory is kernel-heap). The Kconfig gates on `SOC_SERIES_ESP32`, so the reclaim (and its one-way-BLE restriction!) compiles out — BLE stays available for additional-fabric commissioning. |
+| 56K BT-controller DRAM reserve + post-commissioning reclaim (chip-patches/0002/0006, `LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING`) | Gone: no linker carve-out exists on C6 (BT memory is kernel-heap). The Kconfig gates on `SOC_SERIES_ESP32`, so the reclaim (and its one-way-BLE restriction!) compiles out — BLE stays available for additional-fabric commissioning. |
 | Kernel-heap floor lowering (`HEAP_MEM_POOL_ADD_SIZE_ESP_WIFI/BT` re-defaults 24576/16384) | Not needed: C6 keeps the soak-tested driver defaults (51200 + 50000). Now conditional on `SOC_SERIES_ESP32` in app/Kconfig. |
 | WiFi driver buffer trims, AMPDU off, `MBEDTLS_PSA_KEY_SLOT_COUNT=32`, 40K CHIP heap | Stock defaults; CHIP heap uses chip-module's 12K default (measured peak ~8K). |
 | `rand_shim.c` (WiFi blob's strong `random()` vs picolibc) | Not needed: the C6 hal adapter/blobs export no `random`/`rand`/`srand` (verified with nm + source grep). Now compiled only for `SOC_SERIES_ESP32`. |
 | 4 MB flash, 1856K slots (Matter barely fits) | 8 MB, 3840K slots (`dts/btf/partitions_btf_8M.dtsi`, sys partition dropped, boot at 0x0). |
-| Slow software P-256 (`MBEDTLS_ECP_NIST_OPTIM` load-bearing) | Still software — as is all of Matter's crypto on the C6 (P-256, SHA-256, AES-CCM; the only hardware in the PSA chain is the TRNG). The silicon exists but nothing bridges it into tf-psa-crypto; the lever is a PSA transparent driver over the ECC accelerator — see "P-256 acceleration groundwork" above. Keep `NIST_OPTIM` (common prj.conf). Measured Sigma2 ≈ 398 ms (2026-07-18). |
+| Slow software P-256 (`MBEDTLS_ECP_NIST_OPTIM` load-bearing) | **Hardware point-mul** via the ECC engine (`LEDCTRL_PSA_ESP_ECC_DRIVER`, see "P-256 acceleration" above): Sigma2 398→~170 ms, Sigma3 963→~320 ms. SPAKE2+ (and rare verify corner cases) stay on the builtin software path, so keep `NIST_OPTIM` (common prj.conf) — it's load-bearing for them and for the classic board. |
 
 ### RAM note
 

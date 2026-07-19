@@ -56,6 +56,33 @@ if(CONFIG_SOC_SERIES_ESP32)
     target_sources(app PRIVATE src/rand_shim.c)
 endif()
 
+# C6 only: PSA transparent driver feeding P-256 point multiplication to the
+# ECC accelerator. The dispatch hook lives in the tf-psa-crypto module
+# (tf-psa-crypto-patches/0001); the enable macro and esp_ecc_psa_driver.h
+# reach the tfpsacrypto external library through zephyr_interface (its
+# usage requirements resolve at generate time, after this file). Keep both
+# OFF the Kconfig/user-config route: anything in autoconf.h or the
+# TF-PSA-Crypto config chain leaks into CHIP's GN build, whose include
+# dirs are snapshotted before this file runs and cannot see app headers.
+# esp_ecc.c/ecc_hal.c are hal_espressif files its Zephyr glue doesn't
+# build; the lock/clock services they expect are supplied by
+# esp_crypto_shims.c.
+if(CONFIG_LEDCTRL_PSA_ESP_ECC_DRIVER)
+    zephyr_compile_definitions(MBEDTLS_PSA_ESP_ECC_DRIVER_ENABLED)
+    zephyr_include_directories(src/crypto/include)
+    target_include_directories(app PRIVATE
+        ${ZEPHYR_HAL_ESPRESSIF_MODULE_DIR}/components/mbedtls/port/include
+        ${ZEPHYR_TF_PSA_CRYPTO_MODULE_DIR}/include
+        ${ZEPHYR_TF_PSA_CRYPTO_MODULE_DIR}/drivers/builtin/include
+    )
+    target_sources(app PRIVATE
+        src/crypto/esp_ecc_psa_driver.c
+        src/crypto/esp_crypto_shims.c
+        ${ZEPHYR_HAL_ESPRESSIF_MODULE_DIR}/components/mbedtls/port/ecc/esp_ecc.c
+        ${ZEPHYR_HAL_ESPRESSIF_MODULE_DIR}/components/esp_hal_security/ecc_hal.c
+    )
+endif()
+
 # OTA Requestor glue, vendored verbatim from CHIP's examples/platform/silabs/
 # zephyr/ota_requestor (pin 9d45993e3f) so we own it alongside the rest of the
 # scaffold. Re-diff against upstream when re-pinning.

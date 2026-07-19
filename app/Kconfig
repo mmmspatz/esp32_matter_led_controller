@@ -92,4 +92,17 @@ config LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING
 	  must happen on-network (PASE over IP, which commissioners support). A
 	  factory reset reboots, restoring BLE for re-commissioning.
 
+config LEDCTRL_PSA_ESP_ECC_DRIVER
+	bool "P-256 point multiplication on the ECC accelerator"
+	depends on SOC_SERIES_ESP32C6 && CHIP_CRYPTO_PSA
+	default y
+	help
+	  Register a PSA transparent driver (app/src/crypto, dispatch hook in
+	  tf-psa-crypto-patches/0001) that feeds P-256 point multiplication to
+	  the C6's ECC engine: CASE ECDH, ECDSA sign and verify, and
+	  public-key derivation. SPAKE2+ stays on the builtin software path,
+	  which remains fully compiled — the driver deliberately defines no
+	  MBEDTLS_PSA_ACCEL_* macros, and rare verify corner cases fall back
+	  to it.
+
 source "Kconfig.zephyr"

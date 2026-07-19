@@ -83,6 +83,20 @@ for p in "$PWD"/mcuboot-patches/*.patch; do
     fi
 done
 
+# Local patches to TF-PSA-Crypto (west module, reset by `west update`). 0001
+# adds the ESP32-C6 ECC-accelerator transparent driver to the (checked-in
+# generated) PSA driver-wrapper dispatch; the driver itself lives in
+# app/src/crypto and the blocks compile out unless the app build defines
+# MBEDTLS_PSA_ESP_ECC_DRIVER_ENABLED (zephyr_compile_definitions).
+for p in "$PWD"/tf-psa-crypto-patches/*.patch; do
+    if git -C modules/crypto/tf-psa-crypto apply --reverse --check "$p" 2>/dev/null; then
+        echo "tf-psa-crypto patch already applied: $(basename "$p")"
+    else
+        echo "applying tf-psa-crypto patch: $(basename "$p")"
+        git -C modules/crypto/tf-psa-crypto apply "$p"
+    fi
+done
+
 # Local patches to hal_espressif (west module, reset by `west update`). 0001
 # makes the esp_os_*_critical* macros recursion-safe; without it the ESP32-C6
 # BLE controller init nests the modem-clock critical section, leaves IRQs
