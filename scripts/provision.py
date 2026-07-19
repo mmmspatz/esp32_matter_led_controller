@@ -2,8 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 """Provision per-device Matter pairing codes over the USB console.
 
-Run against a device flashed with the prov.conf build variant (the
-production image has no shell):
+Needs a device whose image carries the matter_prov shell.
+
+C6 (btf_wled_esp32c6/esp32c6/hpcore) -- the shell is in the production
+image, so provision in place, no reflash:
+
+    west build --sysbuild -b btf_wled_esp32c6/esp32c6/hpcore app && west flash
+    ./scripts/provision.py --port /dev/ttyUSB0
+
+Classic ESP32 (btf_wled_esp32/esp32/procpu) -- the shell needs the
+BT-less prov.conf variant; provision, then flash the production image:
 
     west build -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=prov.conf
     west flash

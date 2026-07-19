@@ -71,6 +71,11 @@ if(CONFIG_LEDCTRL_PROV_SHELL)
     target_sources(app PRIVATE src/ProvisionShell.cpp)
 endif()
 
+# Heap-stats diagnostic: available in any image that has the shell.
+if(CONFIG_SHELL)
+    target_sources(app PRIVATE src/HeapStatsShell.cpp)
+endif()
+
 if(CONFIG_LEDCTRL_MODE_RGB)
     set(LEDCTRL_ZAP_FILE ${CMAKE_CURRENT_SOURCE_DIR}/data_model/rgb_light.zap)
 else()

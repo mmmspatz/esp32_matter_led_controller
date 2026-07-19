@@ -140,7 +140,39 @@ suspect, was exonerated: its counter stayed balanced throughout.) Fix: shared
 depth-counter critical section (single-core, LIFO), mirroring the npl port.
 HW-verified: no panic, full HCI init, CHIPoBLE + mDNS advertising, `Server
 Listening`, and a phone's Matter "set up device" prompt discovered the beacon.
-End-to-end BLE→WiFi commissioning still to be run on the home network.
+End-to-end BLE→WiFi commissioning now verified on the home network — see below.
+
+### Commissioning + crypto bring-up (2026-07-18, chip-tool over host BLE)
+
+First end-to-end BLE→WiFi commissioning of the reworked C6. **Works**: full
+PASE → attestation → NOC install → WiFi join → CASE-over-IP → operational,
+and cluster control afterward (OnOff + LevelControl applied, confirmed
+device-side). Caveats found, all worth hardening:
+- **CHIPoBLE link is marginally reliable.** One attempt dropped mid-NOC with
+  `BLE GAP connection terminated (reason 0x08)` = supervision timeout, during
+  the heavy BTP data burst; the device did NOT crash (fail-safe reverted the
+  fabric cleanly, re-advertised). Succeeded on retry. Single-radio BLE/WiFi
+  coex or connection-parameter tuning is the usual suspect; needs
+  characterization before trusting it in the field.
+- **CASE handshakes are single-slot and hold half-open sessions.** Rapid,
+  separate chip-tool invocations (each a fresh CASE) saturate the device:
+  `Already in the middle of CASE handshake, sending busy status report`, with a
+  ~62 s back-off (`CHIP Error 0xDB`). A persistent controller (HA) keeps one
+  session and won't trigger this, but a stuck half-open handshake blocking new
+  ones for ~62 s is a robustness gap.
+- **CASE crypto is software.** Sigma2 ≈ 398 ms (P-256, NIST_OPTIM). The C6
+  *does* have an ECC (+MPI) accelerator (`SOC_ECC_SUPPORTED=1`), and Espressif
+  ships a PSA ECDSA driver — but only in the ESP-IDF mbedTLS port, not Zephyr's
+  tf-psa-crypto that we build against, so it goes unused. Wiring it in is a
+  real latency win (see the P-256 row below) but a non-trivial PSA-driver port.
+- **Heaps use upstream defaults; on-hardware peaks confirm that's ample.**
+  Measured with the `chip_heap` shell command (`Malloc::GetStats`,
+  `app/src/HeapStatsShell.cpp`) and `kernel heap`: the CHIP sys_heap
+  high-water is ~8 KB worst-case — commissioning, a full OTA download,
+  ScanNetworks, and concurrent multi-fabric subscriptions all stay there
+  (CHIP's big pools are static `.bss`; OTA streams to flash). The kernel radio
+  pool peaks ~64 KB. Both sit well under the chip-module 12 KB / stock
+  radio-pool defaults, so the C6 overrides neither.
 
 ## What the C6 makes obsolete (the fun list)
 
@@ -149,10 +181,20 @@ End-to-end BLE→WiFi commissioning still to be run on the home network.
 | Split DRAM banks, dram0 at 99.7%, `__noinit` heap relocation (chip-patches/0002), `ESP32_REGION_1_NOINIT` pin | Gone: single unified 512K HP-SRAM bank. Patch 0002 stays for the old board but is inert on C6 (`__noinit` just lands in the same bank). |
 | 56K BT-controller DRAM reserve + post-commissioning reclaim (chip-patches/0005/0006, `LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING`) | Gone: no linker carve-out exists on C6 (BT memory is kernel-heap). The Kconfig gates on `SOC_SERIES_ESP32`, so the reclaim (and its one-way-BLE restriction!) compiles out — BLE stays available for additional-fabric commissioning. |
 | Kernel-heap floor lowering (`HEAP_MEM_POOL_ADD_SIZE_ESP_WIFI/BT` re-defaults 24576/16384) | Not needed: C6 keeps the soak-tested driver defaults (51200 + 50000). Now conditional on `SOC_SERIES_ESP32` in app/Kconfig. |
-| WiFi driver buffer trims, AMPDU off, `MBEDTLS_PSA_KEY_SLOT_COUNT=32`, 40K CHIP heap | Stock defaults; CHIP heap starts at 96K (`app/boards/btf_wled_esp32c6_esp32c6_hpcore.conf`). |
+| WiFi driver buffer trims, AMPDU off, `MBEDTLS_PSA_KEY_SLOT_COUNT=32`, 40K CHIP heap | Stock defaults; CHIP heap uses chip-module's 12K default (measured peak ~8K). |
 | `rand_shim.c` (WiFi blob's strong `random()` vs picolibc) | Not needed: the C6 hal adapter/blobs export no `random`/`rand`/`srand` (verified with nm + source grep). Now compiled only for `SOC_SERIES_ESP32`. |
 | 4 MB flash, 1856K slots (Matter barely fits) | 8 MB, 3840K slots (`dts/btf/partitions_btf_8M.dtsi`, sys partition dropped, boot at 0x0). |
-| Slow software P-256 (`MBEDTLS_ECP_NIST_OPTIM` load-bearing) | Still software: Zephyr wires up only SHA/AES accelerators for C6, no ECC/MPI — keep `NIST_OPTIM` (it's in common prj.conf). The 160 MHz RISC-V core will need re-benchmarking for CASE latency. |
+| Slow software P-256 (`MBEDTLS_ECP_NIST_OPTIM` load-bearing) | Still software, but not for lack of silicon: the C6 *has* an ECC (+MPI) accelerator (`SOC_ECC_SUPPORTED=1`). Only its SHA/AES accelerators are wired into Zephyr's crypto, and Espressif's ESP ECC PSA driver targets the ESP-IDF mbedTLS port, not the tf-psa-crypto we build against — so P-256 stays software. Keep `NIST_OPTIM` (common prj.conf). Measured Sigma2 ≈ 398 ms (2026-07-18); wiring the ECC accel into a tf-psa-crypto PSA driver is the real CASE-latency lever. |
+
+### RAM note
+
+The "unified 512K, room to spare" framing is only half right: the SoC has
+512K HP-SRAM, but the Zephyr link region holding `.bss`/`.data` **and**
+IRAM-resident code is `sram0_0_seg` = 489K (0x77610). It's not so roomy that
+the net-stack diet is pointless — the net-buf/net-pkt/mcast trims and
+`LOG_MODE_MINIMAL` stay portable in prj.conf (they suit the C6 too), not
+classic-only. With upstream heap defaults the build sits comfortably within
+that budget.
 
 New landmine found while porting: chip-module's `Kconfig.defaults`
 re-declares `config FPU` with a bare `default y` and no `depends on`,

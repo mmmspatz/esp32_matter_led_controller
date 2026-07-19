@@ -9,9 +9,10 @@
  * needs no scratch. That grows each app slot from 1344K to 1856K — Matter
  * does not fit in 1344K.
  *
- * The MVP boots via ESP Simple Boot and only uses slot0; slot1 and the
- * mcuboot partition are reserved so an OTA-capable layout needs no
- * repartitioning (and therefore no device re-provisioning) later.
+ * Boots via MCUboot (sysbuild, overwrite-only) from slot0; slot1 is the OTA
+ * staging slot. The layout reserved the mcuboot and slot1 partitions up
+ * front, so enabling OTA needed no repartitioning (and no device
+ * re-provisioning).
  */
 
 &flash0 {

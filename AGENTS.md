@@ -1,17 +1,19 @@
 # AGENTS.md
 
-Matter-over-WiFi LED strip controller: ESP32-WROOM-32E under **Zephyr**
-with connectedhomeip's **generic Zephyr platform** (`src/platform/Zephyr`)
-— not the official ESP-IDF Matter path. To our knowledge the first working
+Matter-over-WiFi LED strip controller under **Zephyr** with
+connectedhomeip's **generic Zephyr platform** (`src/platform/Zephyr`) —
+not the official ESP-IDF Matter path. To our knowledge the first working
 instance of that combination; when something breaks, assume no prior art
 and read the source.
 
-A second board target exists for the planned ESP32-C6-WROOM-1-N8 module
-rework (`btf_wled_esp32c6/esp32c6/hpcore`; compiles, **not yet run on
-hardware**). Most of the RAM-diet machinery below is classic-ESP32-only
-and compiles out on the C6 — see `docs/esp32c6-rework-notes.md` for the
-pad mapping, the GPIO8 strap pull-up the rework needs, and what stops
-applying.
+The primary target is an **ESP32-C6-WROOM-1-N8** reworked onto the original
+BTF board (`btf_wled_esp32c6/esp32c6/hpcore`; boots on hardware, end-to-end
+BLE→WiFi commissioning smoke-test pending). The original **ESP32-WROOM-32E**
+(`btf_wled_esp32/esp32/procpu`) is fully working and preserved as a second
+board target so it can be picked back up — most of the RAM-diet machinery
+below is classic-ESP32-only and compiles out on the C6. See
+`docs/esp32c6-rework-notes.md` for the pad mapping, the GPIO8 strap rework,
+and what stops applying.
 
 ## Workspace
 
@@ -53,11 +55,24 @@ Version pins (manifest/west.yml) — do not bump casually:
 ## Build / flash / monitor
 
 ```bash
-west build -b btf_wled_esp32/esp32/procpu app                                  # CCT (default)
-west build -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=rgb.conf    # RGB variant
-west build -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=prov.conf   # provisioning image
-west build --sysbuild -b btf_wled_esp32c6/esp32c6/hpcore app                   # C6 rework (unvalidated)
-west flash                            # esptool; board has working DTR/RTS autoboot
+# Both boards build under sysbuild + MCUboot; ESP Simple Boot is not used.
+# This repo sets `west config build.sysbuild true`, so --sysbuild can be
+# omitted locally; it's shown explicitly below for a fresh checkout.
+
+# C6 (primary target):
+west build --sysbuild -b btf_wled_esp32c6/esp32c6/hpcore app                    # CCT (default)
+west build --sysbuild -b btf_wled_esp32c6/esp32c6/hpcore app \
+    -- -DEXTRA_CONF_FILE=rgb.conf                                               # RGB variant
+
+# Classic ESP32-WROOM-32E (original board, preserved). The provisioning image
+# is classic-only -- the C6 carries the shell in its production image:
+west build --sysbuild -b btf_wled_esp32/esp32/procpu app                        # CCT
+west build --sysbuild -b btf_wled_esp32/esp32/procpu app \
+    -- -DEXTRA_CONF_FILE=rgb.conf                                               # RGB variant
+west build --sysbuild -b btf_wled_esp32/esp32/procpu app \
+    -- -DEXTRA_CONF_FILE=prov.conf                                              # provisioning image
+
+west flash                            # esptool; DTR/RTS autoboot works on both boards
 west twister -p native_sim/native/64 -T tests   # color math unit tests
 ```
 
@@ -72,7 +87,16 @@ storage partition: fabrics, WiFi credentials and provisioning survive.
 
 ## Provisioning (per-device pairing codes)
 
-Production images have no shell (RAM). Once per board:
+Once per board. The C6 carries the `matter_prov` shell in its production
+image, so provision in place — no separate image, no reflash:
+
+```bash
+west build --sysbuild -b btf_wled_esp32c6/esp32c6/hpcore app && west flash
+./scripts/provision.py --port /dev/ttyUSB0     # writes codes, prints QR
+```
+
+The classic ESP32 has no room for the shell in the production image, so it
+needs the BT-less `prov.conf` variant flashed first:
 
 ```bash
 west build -d build_prov -b btf_wled_esp32/esp32/procpu app -- -DEXTRA_CONF_FILE=prov.conf
@@ -110,19 +134,28 @@ or the build links stale plugin callbacks.
 
 ### Hardware map
 
-| Function | GPIO | Notes |
-|---|---|---|
-| PWM CH1 | 27 | LEDC ch0; CCT strip: **cool** white |
-| PWM CH2 | 26 | LEDC ch1; CCT strip: **warm** white |
-| PWM CH3 | 25 | LEDC ch2; unused in CCT mode |
-| Button S1 | 0 | BOOT strap; short=nothing yet, 5s hold=factory reset |
-| DAT / mic | 16 / 36 | unused |
+The rework moved every channel; the classic pinout is kept for reference
+(`docs/esp32c6-rework-notes.md` has the pad-by-pad table).
 
-WROOM-32E: 4MB flash, no PSRAM. Custom partitions
-(`dts/btf/partitions_btf_4M.dtsi`): 1856K app slots (OTA-shaped, unused
-slot1), 192K `storage`. ESP Simple Boot, no MCUboot.
+| Function | C6 GPIO | Classic GPIO | Notes |
+|---|---|---|---|
+| PWM CH1 | 11 | 27 | LEDC ch0; CCT strip: **cool** white |
+| PWM CH2 | 10 | 26 | LEDC ch1; CCT strip: **warm** white |
+| PWM CH3 | 21 | 25 | LEDC ch2; unused in CCT mode (C6: rewired off the GPIO8 strap pad) |
+| Button S1 | 9 | 0 | BOOT strap; short=nothing yet, 5s hold=factory reset |
+| DAT / mic | 19 / 4 | 16 / 36 | unused |
 
-## RAM: the defining constraint
+C6-WROOM-1-N8: 8MB flash, no PSRAM; `dts/btf/partitions_btf_8M.dtsi` (3840K
+app slots, 192K `storage`, 256K spare), MCUboot at flash 0x0.
+WROOM-32E: 4MB flash, no PSRAM; `dts/btf/partitions_btf_4M.dtsi` (1856K app
+slots, 192K `storage`), MCUboot at 0x1000 (sysbuild), like the C6.
+
+## RAM: the classic ESP32's defining constraint
+
+This whole section is classic-ESP32-only: the C6's 512K HP-SRAM is a single
+unified bank with room to spare, so none of the bank-juggling below applies
+(it compiles out — see the rework notes' obsolescence table). It's preserved
+so the classic board can be picked back up.
 
 Usable DRAM is two banks: **dram0 ≈ 136K** (SRAM2 minus the 56K BT-blob
 reserve) for `.bss`+`.data`, and **dram1 = 96K** (SRAM1) which on this
