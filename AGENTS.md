@@ -1,19 +1,28 @@
 # AGENTS.md
 
-Matter-over-WiFi LED strip controller under **Zephyr** with
+Matter LED strip controller (over Thread or WiFi) under **Zephyr** with
 connectedhomeip's **generic Zephyr platform** (`src/platform/Zephyr`) —
 not the official ESP-IDF Matter path. To our knowledge the first working
 instance of that combination; when something breaks, assume no prior art
 and read the source.
 
 The primary target is an **ESP32-C6-WROOM-1-N8** reworked onto the original
-BTF board (`btf_wled_esp32c6/esp32c6/hpcore`; boots on hardware, end-to-end
-BLE→WiFi commissioning smoke-test pending). The original **ESP32-WROOM-32E**
+BTF board (`btf_wled_esp32c6/esp32c6/hpcore`). Thread is the C6 default
+transport — see the `LEDCTRL_TRANSPORT` choice in `app/Kconfig`.
+Hardware-validated: BLE commissioning + cluster control on both transports
+(Thread into Home Assistant), and OTA. The original **ESP32-WROOM-32E**
 (`btf_wled_esp32/esp32/procpu`) is fully working and preserved as a second
 board target so it can be picked back up — most of the RAM-diet machinery
 below is classic-ESP32-only and compiles out on the C6. See
 `docs/esp32c6-rework-notes.md` for the pad mapping, the GPIO8 strap rework,
-and what stops applying.
+and what stops applying; `docs/esp32c6-thread-notes.md` for the transport
+design and the Thread bring-up.
+
+**Open bug, unwatched:** on WiFi the device drops fully off the network after
+1.7–6 h (looks like WiFi-blob death, not heap). Never root-caused; moving the
+C6 to Thread routed around it rather than fixing it. It still affects the
+classic ESP32, which has no other transport, and it will not resurface
+organically — investigating needs a deliberate soak on a WiFi build.
 
 ## Workspace
 
@@ -272,10 +281,13 @@ chip-tool colorcontrol move-to-color-temperature 370 6 0 0 1 1
 chip-tool pairing unpair 1
 ```
 
-## OTA (firmware update over WiFi)
+## OTA (firmware update)
 
 Working end-to-end via BOTH chip-tool (dev harness) and Home Assistant (the
-production path). MCUboot (sysbuild, overwrite-only, ECDSA-P256 signed) + CHIP OTA
+production path). Transport-agnostic (BDX over whatever the operational
+network is); exercised on WiFi, not yet on Thread — the ~1.3 MB image is
+minutes on WiFi and expected to be much slower over Thread, so the requestor
+timeouts want verifying there. MCUboot (sysbuild, overwrite-only, ECDSA-P256 signed) + CHIP OTA
 Requestor; config in `app/sysbuild.conf` + `sysbuild/mcuboot.conf` + `prj.conf`.
 See also [OTA approach] and [HA OTA integration] in the auto-memory for the full
 bring-up story.

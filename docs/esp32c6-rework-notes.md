@@ -1,10 +1,10 @@
 # ESP32-C6-WROOM-1-N8 rework: migration notes
 
-Plan: desolder the ESP32-WROOM-32E from the BTF board and solder an
+Desolder the ESP32-WROOM-32E from the BTF board, solder an
 ESP32-C6-WROOM-1-N8 onto the same footprint. This file records the
 hardware mapping, the firmware deltas, and which of the classic-ESP32
-battle scars stop applying. Firmware target: `btf_wled_esp32c6/esp32c6/hpcore`
-(board skeleton is in-tree; **not yet validated on hardware**).
+battle scars stop applying. Firmware target: `btf_wled_esp32c6/esp32c6/hpcore`,
+validated on the reworked board (bring-up log below).
 
 Sources: ESP32-WROOM-32E/32UE datasheet v2.0, ESP32-C6-WROOM-1/-1U
 datasheet v1.4.
