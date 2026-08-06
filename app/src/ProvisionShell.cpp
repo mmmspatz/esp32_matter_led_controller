@@ -13,8 +13,11 @@
  */
 
 #include <cstdlib>
+#include <cstring>
 
+#include <zephyr/drivers/hwinfo.h>
 #include <zephyr/shell/shell.h>
+#include <zephyr/sys/util.h>
 
 #include <platform/Zephyr/ZephyrConfig.h>
 
@@ -22,6 +25,22 @@ using chip::DeviceLayer::Internal::ZephyrConfig;
 
 namespace
 {
+
+/*
+ * The eFuse base MAC, which is what provision.py names its records after:
+ * the discriminator is a random 12-bit discovery filter, so it collides.
+ */
+void FormatDeviceId(char (&out)[13])
+{
+	uint8_t id[6];
+	ssize_t len = hwinfo_get_device_id(id, sizeof(id));
+
+	if (len != sizeof(id)) {
+		strcpy(out, "unknown");
+		return;
+	}
+	bin2hex(id, sizeof(id), out, sizeof(out));
+}
 
 int cmd_set(const struct shell *sh, size_t argc, char **argv)
 {
@@ -71,6 +90,7 @@ int cmd_set(const struct shell *sh, size_t argc, char **argv)
 int cmd_show(const struct shell *sh, size_t argc, char **argv)
 {
 	uint32_t passcode = 0, discriminator = 0, iterations = 0;
+	char id[13];
 	bool provisioned = ZephyrConfig::ReadConfigValue(ZephyrConfig::kConfigKey_SetupPinCode,
 							 passcode) == CHIP_NO_ERROR;
 
@@ -78,12 +98,14 @@ int cmd_show(const struct shell *sh, size_t argc, char **argv)
 					    discriminator);
 	(void)ZephyrConfig::ReadConfigValue(ZephyrConfig::kConfigKey_Spake2pIterationCount,
 					    iterations);
+	FormatDeviceId(id);
 
 	if (provisioned) {
-		shell_print(sh, "PROV_SHOW provisioned passcode=%u discriminator=%u iterations=%u",
-			    passcode, discriminator, iterations);
+		shell_print(sh,
+			    "PROV_SHOW provisioned id=%s passcode=%u discriminator=%u iterations=%u",
+			    id, passcode, discriminator, iterations);
 	} else {
-		shell_print(sh, "PROV_SHOW test-defaults (nothing provisioned)");
+		shell_print(sh, "PROV_SHOW test-defaults id=%s (nothing provisioned)", id);
 	}
 	return 0;
 }

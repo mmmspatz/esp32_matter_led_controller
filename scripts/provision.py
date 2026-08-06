@@ -30,6 +30,7 @@ import base64
 import datetime
 import json
 import pathlib
+import re
 import secrets
 import subprocess
 import sys
@@ -40,6 +41,8 @@ CHIP = REPO / "modules" / "connectedhomeip"
 sys.path.insert(0, str(CHIP / "src" / "setup_payload" / "python"))
 from SetupPayload import SetupPayload  # noqa: E402
 
+import qrcode  # noqa: E402
+import qrcode.image.svg  # noqa: E402
 import serial  # noqa: E402
 
 # Test VID/PID: must match CHIPProjectConfig.h while the example DAC is in use.
@@ -102,7 +105,12 @@ def main() -> int:
     port = serial.Serial(args.port, 115200, timeout=0.2)
     shell_cmd(port, f"matter_prov set {passcode} {discriminator} {args.iterations} {salt_b64} {verifier_b64}",
               "PROV_OK")
-    shell_cmd(port, "matter_prov show", "PROV_SHOW provisioned")
+    shown = shell_cmd(port, "matter_prov show", "PROV_SHOW provisioned")
+
+    match = re.search(r"\bid=([0-9a-f]{12})\b", shown)
+    if not match:
+        raise RuntimeError(f"device did not report an eFuse id; reflash it:\n{shown}")
+    device_id = match.group(1)
 
     # Reset so the new commissionable data takes effect.
     port.setDTR(False)
@@ -117,6 +125,7 @@ def main() -> int:
     manual = payload.generate_manualcode()
 
     record = {
+        "device_id": device_id,
         "provisioned_at": datetime.datetime.now().isoformat(timespec="seconds"),
         "passcode": passcode,
         "discriminator": discriminator,
@@ -130,19 +139,21 @@ def main() -> int:
     }
     devices = REPO / "devices"
     devices.mkdir(exist_ok=True)
-    record_path = devices / f"device-{discriminator:04d}.json"
+    record_path = devices / f"device-{device_id}.json"
     record_path.write_text(json.dumps(record, indent=2) + "\n")
+
+    # Scannable copy of the same payload, for phones that can't read the
+    # terminal's ASCII rendering.
+    qr_path = record_path.with_suffix(".svg")
+    qrcode.make(qr, image_factory=qrcode.image.svg.SvgPathFillImage).save(qr_path)
 
     print(f"\nProvisioned. Record: {record_path}")
     print(f"  Manual pairing code: {manual}")
     print(f"  QR payload:          {qr}")
-    try:
-        import qrcode
-        q = qrcode.QRCode()
-        q.add_data(qr)
-        q.print_ascii(invert=True)
-    except ImportError:
-        print("  (pip install qrcode for a terminal QR image)")
+    print(f"  QR image:            {qr_path}")
+    q = qrcode.QRCode()
+    q.add_data(qr)
+    q.print_ascii(invert=True)
     print("Flash the production image next; the pairing data persists.")
     return 0
 

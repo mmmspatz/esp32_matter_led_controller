@@ -150,12 +150,14 @@ endchoice
 config LEDCTRL_PROV_SHELL
 	bool "Pairing-code provisioning shell commands"
 	depends on SHELL
+	select HWINFO
 	help
 	  matter_prov set/show/clear commands writing the chip-fct settings
-	  keys read by the commissionable-data provider. RAM does not allow
-	  the shell in the production image; enable via the prov.conf build
-	  variant, provision, then flash the production image (the settings
-	  partition survives reflashing).
+	  keys read by the commissionable-data provider (and reporting the
+	  eFuse device ID that provision.py files its records under). RAM
+	  does not allow the shell in the production image; enable via the
+	  prov.conf build variant, provision, then flash the production
+	  image (the settings partition survives reflashing).
 
 if LEDCTRL_MODE_CCT
 
