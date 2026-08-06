@@ -98,6 +98,10 @@ if(CONFIG_LEDCTRL_PROV_SHELL)
     target_sources(app PRIVATE src/ProvisionShell.cpp)
 endif()
 
+if(CONFIG_LEDCTRL_WIFI_CREDS_SHELL)
+    target_sources(app PRIVATE src/WifiCredsShell.cpp)
+endif()
+
 # Heap-stats diagnostic: available in any image that has the shell.
 if(CONFIG_SHELL)
     target_sources(app PRIVATE src/HeapStatsShell.cpp)

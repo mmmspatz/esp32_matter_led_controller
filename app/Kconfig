@@ -163,6 +163,23 @@ config LEDCTRL_PROV_SHELL
 	  variant: flash prov, provision, then flash the production image
 	  (the settings partition survives reflashing).
 
+config LEDCTRL_WIFI_CREDS_SHELL
+	bool "WiFi credential injection shell commands"
+	depends on SHELL && CHIP_WIFI
+	help
+	  matter_wifi set/show/clear commands writing the WiFi station
+	  credentials that ZephyrWifiDriver persists (its two g/wi KVS keys)
+	  and that normally only a commissioning session produces.
+
+	  The recovery case this exists for: a board that already holds a
+	  fabric but no credentials -- commissioned over Thread, then
+	  reflashed with the WiFi transport. It boots commissioned, so CHIP
+	  disables BLE advertising instead of opening a commissioning window,
+	  and NetworkCommissioning is only reachable over the network it
+	  cannot join. Without this the only way out is a factory reset.
+
+	  Bench tooling: takes the PSK in plaintext over the console.
+
 if LEDCTRL_MODE_CCT
 
 config LEDCTRL_CH_WARM
