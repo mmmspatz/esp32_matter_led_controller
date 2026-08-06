@@ -41,3 +41,6 @@ __pycache__/
 
 # Generated Matter OTA image (build artifact).
 /fw.ota
+
+# Soak logs from scripts/wifi-soak.py (may contain network details).
+soak-*.log
