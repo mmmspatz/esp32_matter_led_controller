@@ -154,10 +154,14 @@ config LEDCTRL_PROV_SHELL
 	help
 	  matter_prov set/show/clear commands writing the chip-fct settings
 	  keys read by the commissionable-data provider (and reporting the
-	  eFuse device ID that provision.py files its records under). RAM
-	  does not allow the shell in the production image; enable via the
-	  prov.conf build variant, provision, then flash the production
-	  image (the settings partition survives reflashing).
+	  eFuse device ID that provision.py files its records under).
+
+	  On the C6 this is enabled in the production image (board conf):
+	  512K SRAM has room for the shell alongside BT, so a board is
+	  provisioned in place over the console. On the classic ESP32 dram0
+	  does not allow it, so the shell arrives via the BT-less prov.conf
+	  variant: flash prov, provision, then flash the production image
+	  (the settings partition survives reflashing).
 
 if LEDCTRL_MODE_CCT
 
@@ -189,7 +193,7 @@ config LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING
 	  After the device is fully provisioned and joined to WiFi, tear down the
 	  BLE stack (bt_disable) and hand the ~54.8 KiB CONFIG_ESP32_BT_RESERVE_DRAM
 	  region to the CHIP sys_heap as a second heap bank (see chip-patches
-	  0005/0006). This makes BLE a one-way, commissioning-only resource: it
+	  0002/0006). This makes BLE a one-way, commissioning-only resource: it
 	  CANNOT be re-enabled without a reboot, so additional-fabric commissioning
 	  must happen on-network (PASE over IP, which commissioners support). A
 	  factory reset reboots, restoring BLE for re-commissioning.

@@ -9,7 +9,8 @@
  * These shell commands write those keys using CHIP's own ZephyrConfig
  * serialization, so there is no format to keep in sync. Driven by
  * scripts/provision.py over the USB console; only present in builds
- * with CONFIG_LEDCTRL_PROV_SHELL (see prov.conf).
+ * with CONFIG_LEDCTRL_PROV_SHELL (C6 production image; prov.conf on the
+ * classic ESP32).
  */
 
 #include <cstdlib>
