@@ -100,8 +100,16 @@ Version pins (manifest/west.yml) — do not bump casually:
 
 ```bash
 # Both boards build under sysbuild + MCUboot; ESP Simple Boot is not used.
-# This repo sets `west config build.sysbuild true`, so --sysbuild can be
-# omitted locally; it's shown explicitly below for a fresh checkout.
+# --sysbuild is REQUIRED and nothing sets it for you: build.sysbuild is not in
+# west config (.west/ is gitignored, so only bootstrap.sh could set it, and it
+# doesn't). CONFIG_BOOTLOADER_MCUBOOT reaches the app solely by sysbuild
+# propagation from app/sysbuild.conf, so a plain `west build` still succeeds --
+# it just produces no bootloader and no zephyr.signed.bin, while still linking
+# at slot0 via zephyr,code-partition. `west flash` on that build dir writes an
+# unheadered image to slot0; MCUboot jumps past a header that isn't there and
+# the board is dead until reflashed from a sysbuild build (storage, and so the
+# fabric, survives). Non-sysbuild builds are fine for compile checks, -t
+# menuconfig / ram_report, and compile_commands.json -- just never flash them.
 
 # C6 (primary target):
 west build --sysbuild -b btf_wled_esp32c6/esp32c6/hpcore app                    # CCT (default)
@@ -309,7 +317,7 @@ bring-up story.
 # 1. bump the version the requestor compares (prj.conf), rebuild
 #    CONFIG_CHIP_DEVICE_SOFTWARE_VERSION=<N> + _STRING="0.0.<N>"
 #    --sysbuild is REQUIRED (else no MCUboot image / no zephyr.signed.bin);
-#    build.sysbuild is not set in west config here.
+#    see the build section -- nothing sets build.sysbuild for you.
 west build --sysbuild -b btf_wled_esp32/esp32/procpu app
 # 2. wrap the SIGNED slot image (NOT raw zephyr.bin) as a Matter OTA image
 python modules/connectedhomeip/src/app/ota_image_tool.py create \
