@@ -97,5 +97,63 @@ it needs a deliberate soak on a WiFi build (`wifi.conf`) to investigate.
 Still presumed present, and it still affects the classic ESP32, which has no
 other transport.
 
+### Investigating it
+
+Everything below is set up and committed; a session picking this up should
+not need to rediscover any of it.
+
+```bash
+west build --sysbuild -d build_wifidiag -p always \
+    -b btf_wled_esp32c6/esp32c6/hpcore app \
+    -- -DEXTRA_CONF_FILE="wifi.conf;wifi-diag.conf" \
+       -DEXTRA_DTC_OVERLAY_FILE=wifi.overlay \
+       -DCONFIG_LEDCTRL_WIFI_CREDS_SHELL=y
+west flash -d build_wifidiag
+./scripts/wifi-soak.py --hours 8          # attach once, walk away
+```
+
+**Attaching to the serial port reboots the board.** The DTR/RTS auto-reset
+circuit fires on open and clearing dtr/rts in software first does not stop it
+— verified by two attaches 32 s apart both seeing the device clock start at
+00:00:05. Any attach-sample-detach loop therefore measures nothing but the
+first seconds of a fresh boot, repeatedly, while looking like a valid
+negative result. `wifi-soak.py` exists to hold one handle open for the whole
+run and inject shell commands through it; use it, or reproduce that property.
+
+Three more things that are not obvious from the config:
+
+- **The CHIP log module drowns the UART.** `platform/Zephyr/Logging.cpp:23`
+  hardcodes `LOG_MODULE_REGISTER(chip, LOG_LEVEL_DBG)`, so `MATTER_LOG_LEVEL`
+  cannot lower it. At 115200 the log stream fell ~90 s behind real time inside
+  a two-minute capture, and `LOG_MODE_IMMEDIATE` makes the device *block* on
+  those writes — distorting the timing under test. `wifi-diag.conf` enables
+  runtime filtering for this; the soak script applies `log enable wrn chip` +
+  `log enable dbg esp32_wifi` after each boot. Raise `chip` to `inf` when you
+  want WiFiManager's own progress lines (recovery interval, disconnect reason
+  — both `ChipLogProgress`).
+- **The diag image logs the PSK in cleartext** (`net_wifi_mgmt: wifi_connect:
+  psk` plus hexdump, at `NET_L2_WIFI_MGMT` debug). The soak script redacts it
+  on the way to disk; a raw `west espressif monitor` capture does not, so
+  don't paste one into an issue.
+- **`patches/connectedhomeip/0007` already fixed the terminal half.** The recovery
+  backoff jitter was uninitialised, which turned any sustained recovery
+  failure into a permanent one. Expect the symptom to change from "gone
+  forever" to "drops and recovers" — that is progress, not a fix.
+
+What to chase first: this board re-establishes WiFi roughly every 100 s (see
+the `kDnssdInitialized` comment in `scaffold/CommonDeviceCallbacks.cpp`),
+which reproduces in two minutes rather than hours and is the likely feeder of
+failed scans into the backoff ramp. Establish whether that cycle is a real
+disassociation (the 802.11 reason code from `SetLastDisconnectReason()`
+splits AP-side eviction from device-side failure) or merely mDNS rebinding —
+they are different bugs. `wifi ps off` is the other cheap early experiment;
+nothing pins power save today, so the build runs on the Espressif min-modem
+default.
+
+Status as of 2026-08-05: instrumentation landed and smoke-tested, patch 0007
+applied and flashed. **No soak has actually been run yet** — every
+observation so far came from sub-90-second windows on a board that the
+observer kept rebooting, so nothing is known about the wedge itself.
+
 Factory reset and the LED cluster path are transport-agnostic above
 `LightingManager` and need no Thread-specific work.
