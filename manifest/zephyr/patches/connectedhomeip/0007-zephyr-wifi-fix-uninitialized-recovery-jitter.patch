@@ -1,0 +1,47 @@
+Zephyr WiFi: fix uninitialized self-reference in the recovery jitter.
+
+CalculateNextRecoveryTime() computes the jitter from `jitter` itself,
+inside that variable's own initializer:
+
+    int32_t jitter = chip::Crypto::GetRandU32() % (2 * jitter + 1) - jitter;
+
+The intended operand is kConnectionRecoveryJitterMs
+(CONFIG_CHIP_WIFI_CONNECTION_RECOVERY_JITTER), which is declared at
+WiFiManager.h:178 and referenced nowhere else in the tree -- the giveaway
+that this is a typo, not a trick. As written it reads uninitialized stack,
+so mConnectionRecoveryTimeMs (uint32_t) becomes
+kConnectionRecoveryMaxIntervalMs + <arbitrary int32>, wrapping to anything
+up to ~49 days. The value is stored, so every later call re-enters the same
+branch and re-rolls fresh garbage.
+
+Consequence on this project: the backoff doubles from MINIMUM_INTERVAL
+(500 ms) on each "SSID not found" re-scan and needs 13 doublings to exceed
+MAXIMUM_INTERVAL (3600000 ms) -- about 68 minutes of continuously failing
+recovery. After that the retry interval is garbage and the device
+effectively stops trying to rejoin, which matches the long-open "drops
+fully off WiFi after 1.7-6 h and never returns" bug (see
+docs/esp32c6-thread-notes.md). This is not what initiates the failure --
+reaching the branch takes 13 consecutive failed scans -- but it is why the
+failure is terminal rather than transient.
+
+Also note CONFIG_ESP32_WIFI_STA_RECONNECT is off here, so the driver has no
+independent auto-reconnect to paper over it: this recovery path is the only
+route back onto the network.
+
+Upstream candidate: yes, unconditionally -- it is UB on every generic-Zephyr
+WiFi build, not something specific to this port.
+
+diff --git a/src/platform/Zephyr/wifi/WiFiManager.cpp b/src/platform/Zephyr/wifi/WiFiManager.cpp
+index 7945d33aed..7615b11880 100644
+--- a/src/platform/Zephyr/wifi/WiFiManager.cpp
++++ b/src/platform/Zephyr/wifi/WiFiManager.cpp
+@@ -698,7 +698,8 @@ System::Clock::Milliseconds32 WiFiManager::CalculateNextRecoveryTime()
+     if (mConnectionRecoveryTimeMs > kConnectionRecoveryMaxIntervalMs)
+     {
+         // Find the new random jitter value in range [-jitter, +jitter].
+-        int32_t jitter            = chip::Crypto::GetRandU32() % (2 * jitter + 1) - jitter;
++        int32_t jitter            = static_cast<int32_t>(chip::Crypto::GetRandU32() % (2 * kConnectionRecoveryJitterMs + 1)) -
++            static_cast<int32_t>(kConnectionRecoveryJitterMs);
+         mConnectionRecoveryTimeMs = kConnectionRecoveryMaxIntervalMs + jitter;
+         return System::Clock::Milliseconds32(mConnectionRecoveryTimeMs);
+     }

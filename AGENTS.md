@@ -78,6 +78,10 @@ Version pins (manifest/west.yml) — do not bump casually:
     fails 0x6C without).
   - connectedhomeip 0006: Zephyr BLE `_Shutdown` sets
     `mServiceMode = Disabled` (makes BLE strictly one-way for the reclaim).
+  - connectedhomeip 0007: Zephyr WiFi recovery jitter read its own
+    uninitialized value, so past ~68 min of failed rejoins the retry
+    interval became garbage and the device stopped trying (makes the WiFi
+    drop-off terminal; not its cause).
   - hal_espressif 0001: makes the port's `esp_os_*_critical*` macros
     recursion-safe: the ESP32-C6 BLE controller init nests the modem-clock
     critical section, and the port's non-recursive macros left IRQs disabled →
@@ -184,6 +188,61 @@ commissionable-data provider before the test-code fallback
 (20202021/0xF00, manual code 34970112332), untouched by factory reset
 (as long as `CONFIG_CHIP_FACTORY_RESET_ERASE_SETTINGS` stays off) and by
 reflashing. Records land in gitignored `devices/`.
+
+## Switching transport on a commissioned board
+
+The Matter fabric (NOC/ICAC/RCAC, operational keys, node ID, ACLs) is
+transport-agnostic and lives in the CHIP KVS, and reflashing does not touch
+`storage` — so a C6 reflashed from Thread to WiFi (or back) boots still
+commissioned and keeps its place in the controller's fabric. Only the
+operational network changes.
+
+```bash
+west build --sysbuild -d build_wifi -p always -b btf_wled_esp32c6/esp32c6/hpcore app \
+    -- -DEXTRA_CONF_FILE=wifi.conf -DEXTRA_DTC_OVERLAY_FILE=wifi.overlay
+```
+
+Thread→WiFi is the direction that bites. WiFi credentials are two CHIP KVS
+keys (`g/wi/s`, `g/wi/p`) that only `ZephyrWifiDriver::CommitConfiguration()`
+writes, i.e. only a commissioning session produces them; a Thread build
+never reads or writes them. If they survive from an earlier WiFi
+commissioning with no factory reset since, `ZephyrWifiDriver::Init` →
+`LoadFromStorage()` reconnects on its own and the node simply comes back.
+Otherwise the board is **stranded**: `Server::Init` takes the
+`FabricCount() != 0` branch and disables BLE advertising rather than opening
+a commissioning window, NetworkCommissioning is only reachable over the
+network it cannot join, and the button offers just a 5s factory reset —
+which also destroys the fabric.
+
+`CONFIG_LEDCTRL_WIFI_CREDS_SHELL=y` (default n) is the way out. It adds
+`matter_wifi`, which drives the same driver calls a commissioner would —
+stage, `CommitConfiguration()`, connect — leaving storage byte-identical to
+a real WiFi commissioning:
+
+```bash
+west build --sysbuild -d build_wifi -p always -b btf_wled_esp32c6/esp32c6/hpcore app \
+    -- -DEXTRA_CONF_FILE=wifi.conf -DEXTRA_DTC_OVERLAY_FILE=wifi.overlay \
+       -DCONFIG_LEDCTRL_WIFI_CREDS_SHELL=y
+west flash -d build_wifi
+west espressif monitor          # esp-idf's idf_monitor, vendored in the HAL; Ctrl+] exits
+matter_wifi set "<ssid>" "<psk>"
+matter_wifi show                # stored SSID + station state
+```
+
+HW-verified: a Thread-commissioned C6 rejoined its fabric this way and took
+cluster control from Home Assistant with no re-commissioning.
+
+CHIP's own `matter wifi connect` is NOT a substitute — it stages and connects
+but never commits, so it is lost on reboot. `CONFIG_CHIP_LIB_SHELL` also
+would not link: `AppTaskZephyr.cpp` calls `GetAppCLI().Init()` under
+`ENABLE_CHIP_SHELL`, but `AppCLIZephyr.*` was never vendored into
+`src/scaffold/`.
+
+Going back is free — flash the Thread build and the still-resident dataset
+and fabric bring it up. What is not free is a factory reset: it wipes the
+whole CHIP KVS (WiFi credentials included, `chip-fct` pairing codes excluded).
+Run on a WiFi build it also leaves the `ot/` settings subtree behind, since
+OpenThread is not linked in to factory-reset itself.
 
 ## Architecture
 

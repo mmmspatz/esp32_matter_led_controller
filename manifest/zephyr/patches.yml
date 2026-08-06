@@ -72,6 +72,21 @@ patches:
       cannot be re-enabled onto the reclaimed BT DRAM (0002): BLE becomes
       strictly one-way per boot. Mirrors the ESP32/NimBLE BLEManagerImpl.
 
+  - path: connectedhomeip/0007-zephyr-wifi-fix-uninitialized-recovery-jitter.patch
+    sha256sum: 4399cd9b314264fe9b306ef1ebdee1935f3db21261eacc25dd62b463b393a16e
+    module: modules/connectedhomeip
+    author: Mark H. Spatz
+    email: mspatz@leaflabs.com
+    date: 2026-08-05
+    apply-command: git apply
+    upstreamable: true
+    comments: |
+      Zephyr WiFiManager::CalculateNextRecoveryTime() initialized `jitter`
+      from itself instead of kConnectionRecoveryJitterMs. Once the recovery
+      backoff reaches its maximum (~68 min of failed re-scans) the retry
+      interval became garbage (up to ~49 days) and the device stopped trying
+      to rejoin: why the WiFi drop-off is terminal, not what starts it.
+
   - path: hal_espressif/0001-recursion-safe-esp-os-critical-section.patch
     sha256sum: 4c041edb6338417c0573001410a9265c0e5bbbc53e8ef99e6c163a4ec504aa3b
     module: modules/hal/espressif
