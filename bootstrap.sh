@@ -45,7 +45,8 @@ west packages pip --install
 
 pip install --quiet \
     -r modules/connectedhomeip/scripts/setup/requirements.build.txt \
-    -r modules/connectedhomeip/scripts/setup/requirements.zephyr.txt
+    -r modules/connectedhomeip/scripts/setup/requirements.zephyr.txt \
+    -r modules/connectedhomeip/scripts/setup/requirements.setuppayload.txt
 
 # WiFi/BT MAC, PHY and coexistence libraries are proprietary Espressif blobs.
 west blobs fetch hal_espressif
