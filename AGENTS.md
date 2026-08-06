@@ -38,6 +38,18 @@ Builds REQUIRE `source activate.sh` — CHIP is compiled by GN, and gn
 lives in CHIP's CIPD environment. Host python must be ≥3.12 (pyenv local
 is set); CHIP's pigweed env pip-solve fails under 3.10.
 
+Every build is MCUboot-signed, so it needs `keys/ota-signing-ecdsa-p256.pem`
+(path and type come from `app/sysbuild.conf`). That key is a per-developer
+secret — `keys/` is gitignored, like `devices/` — so a fresh clone has none
+and the first build otherwise dies in `zephyr/cmake/mcuboot.cmake` with
+"Can't sign images for MCUboot: can't find file …". The last step of
+`bootstrap.sh` generates one via `scripts/gen-signing-key.sh` (idempotent;
+also runnable by hand, and it prints a short digest of the public half so a
+board that rejects an image can be matched against the key on disk).
+**Back that file up.** MCUboot embeds the public half at build time, so
+losing it means the boards flashed from this checkout can only be updated
+by USB reflash — see the OTA section below.
+
 Version pins (manifest/west.yml) — do not bump casually:
 - **Zephyr v4.4.1**: mbedTLS 4.x + TF-PSA-Crypto split; CHIP runs on
   its PSA crypto backend (`CONFIG_CHIP_CRYPTO_PSA`, SPAKE2+ on the
@@ -305,6 +317,15 @@ python modules/connectedhomeip/src/app/ota_image_tool.py create \
   build/app/zephyr/zephyr.signed.bin fw.ota
 ```
 - PID is **0x8005** (0x010C/0x010D are device-type IDs, not PIDs); VID 0xFFF1 (test).
+- **The signing key is `keys/ota-signing-ecdsa-p256.pem`, generated per developer
+  by `scripts/gen-signing-key.sh` (run from `bootstrap.sh`) and gitignored.** An OTA
+  image only installs if it is signed with the same key as the MCUboot already on
+  the board, so: back the file up; if you replace it, reflash MCUboot over USB
+  (`west flash` writes both images) before the board will take an OTA again; and a
+  board flashed from a different checkout — i.e. a different key — will download the
+  image and then reject it in `bootutil_verify_sig`. `gen-signing-key.sh` prints a
+  digest of the public half to tell keys apart. Not Secure Boot: this authenticates
+  the delivery path, not the flash.
 - Payload is `zephyr.signed.bin` (MCUboot-headered + ECDSA-P256-signed). Signature
   type is set by sysbuild (`SB_CONFIG_BOOT_SIGNATURE_TYPE_ECDSA_P256` + key), not the
   SoC overlay; MCUboot validates the SECONDARY before swap (slot0 itself is

@@ -130,6 +130,13 @@ shopt -u nullglob
 # CHIP's own environment (gn, ninja, zap, ...) via pigweed CIPD.
 bash modules/connectedhomeip/scripts/bootstrap.sh -p none
 
+# The MCUboot OTA signing key is a per-developer secret, so keys/ is gitignored
+# and a fresh clone has none -- without it the very first build dies in
+# zephyr/cmake/mcuboot.cmake ("can't find file .../ota-signing-ecdsa-p256.pem").
+# Generated last so its back-it-up banner lands next to "Bootstrap complete"
+# instead of scrolling past under the toolchain output. Never overwrites.
+./scripts/gen-signing-key.sh
+
 deactivate
 
 echo

@@ -53,7 +53,7 @@ at build time. BLE is commissioning-only either way.
 ```bash
 git clone https://github.com/mmmspatz/esp32_matter_led_controller
 cd esp32_matter_led_controller
-./bootstrap.sh                # coffee-length: Zephyr + Matter SDK + toolchain
+./bootstrap.sh                # coffee-length: Zephyr + Matter SDK + toolchain + signing key
 source activate.sh
 west build --sysbuild -b btf_wled_esp32c6/esp32c6/hpcore app
 west flash
@@ -101,6 +101,13 @@ after wiping state.
 OTA works end to end via both Home Assistant and chip-tool: MCUboot (dual
 slots, ECDSA-P256 signed) plus the CHIP OTA Requestor. Building and serving
 a signed `.ota` is documented in [AGENTS.md](AGENTS.md#ota-firmware-update).
+
+Every build is signed, so `bootstrap.sh` generates a keypair for you at
+`keys/ota-signing-ecdsa-p256.pem` (gitignored — it's your secret, not the
+project's; `scripts/gen-signing-key.sh` makes it, and never overwrites an
+existing one). **Back it up.** MCUboot bakes in the public half when you
+build it, and only accepts OTA images signed by the matching private half,
+so losing the file leaves your flashed boards USB-only forever.
 
 ## Status
 
