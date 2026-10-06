@@ -63,7 +63,8 @@ namespace {
 // has dropped the BLE link, tear the controller down (bt_disable, via
 // BLEMgr().Shutdown()) and hand the CONFIG_ESP32_BT_RESERVE_DRAM window to the
 // CHIP heap as a second bank. One-way: BLE cannot return without a reboot (see
-// chip-patches 0005/0006). Net gain is only the ~54.8 KiB linker reserve.
+// patches/connectedhomeip 0002/0006). Net gain is only the ~54.8 KiB linker
+// reserve.
 
 constexpr uint32_t kBleReclaimRetryIntervalSec = 2;
 constexpr int kBleReclaimMaxRetries            = 15;

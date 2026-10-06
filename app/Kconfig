@@ -192,11 +192,12 @@ config LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING
 	help
 	  After the device is fully provisioned and joined to WiFi, tear down the
 	  BLE stack (bt_disable) and hand the ~54.8 KiB CONFIG_ESP32_BT_RESERVE_DRAM
-	  region to the CHIP sys_heap as a second heap bank (see chip-patches
-	  0002/0006). This makes BLE a one-way, commissioning-only resource: it
-	  CANNOT be re-enabled without a reboot, so additional-fabric commissioning
-	  must happen on-network (PASE over IP, which commissioners support). A
-	  factory reset reboots, restoring BLE for re-commissioning.
+	  region to the CHIP sys_heap as a second heap bank (see
+	  patches/connectedhomeip 0002/0006). This makes BLE a one-way,
+	  commissioning-only resource: it CANNOT be re-enabled without a
+	  reboot, so additional-fabric commissioning must happen on-network
+	  (PASE over IP, which commissioners support). A factory reset
+	  reboots, restoring BLE for re-commissioning.
 
 config LEDCTRL_PSA_ESP_ECC_DRIVER
 	bool "P-256 point multiplication on the ECC accelerator"
@@ -204,7 +205,7 @@ config LEDCTRL_PSA_ESP_ECC_DRIVER
 	default y
 	help
 	  Register a PSA transparent driver (app/src/crypto, dispatch hook in
-	  tf-psa-crypto-patches/0001) that feeds P-256 point multiplication to
+	  patches/tf-psa-crypto/0001) that feeds P-256 point multiplication to
 	  the C6's ECC engine: CASE ECDH, ECDSA sign and verify, and
 	  public-key derivation. SPAKE2+ stays on the builtin software path,
 	  which remains fully compiled — the driver deliberately defines no

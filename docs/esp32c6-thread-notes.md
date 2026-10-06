@@ -48,7 +48,7 @@ channel almost never hit the failure path — which is why basic traffic worked
 and hid it — but back-to-back fragments under WiFi/BLE coex do, and with no
 retry the loss compounds with fragment count. Multi-fragment 6LoWPAN datagrams
 (notably SRP registration) never reassembled and commissioning stalled at
-"checking connectivity". Carried as `zephyr-patches/0001` (mirrors the nrf5
+"checking connectivity". Carried as `patches/zephyr/0001` (mirrors the nrf5
 driver: CCA/coex → `-EBUSY`, no-ack → `-ENOMSG`, else `-EIO`); upstream
 candidate, sibling of Zephyr #113666.
 

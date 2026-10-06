@@ -6,9 +6,10 @@ could re-enter StartAdvertising() -> bt_enable(). Set the service mode to
 Disabled first, mirroring the ESP32/NimBLE BLEManagerImpl.
 
 This matters when the application reclaims the BT-controller DRAM after
-commissioning (see chip-patches/0005 + Malloc::AddReclaimedRegion): bringing
-the controller back up would touch freed memory. It makes BLE strictly a
-one-shot, commissioning-only resource per boot.
+commissioning (see patches/connectedhomeip/0002 +
+Malloc::AddReclaimedRegion): bringing the controller back up would touch
+freed memory. It makes BLE strictly a one-shot, commissioning-only resource
+per boot.
 
 Upstream candidate: yes (aligns the Zephyr platform with the NimBLE one).
 

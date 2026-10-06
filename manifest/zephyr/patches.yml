@@ -1,0 +1,133 @@
+# Local patches to west projects that have not (yet) landed upstream, applied
+# by `west patch apply` (bootstrap.sh runs it). Patch files live under
+# patches/<project>/ next to this file. Schema:
+# zephyr/scripts/schemas/patch-schema.yml.
+#
+# Each patch should be small, carry a header explaining why it exists, and
+# reference an upstream issue/PR once one is filed. The goal is for this list
+# to trend toward empty.
+#
+# Editing a patch file changes its sha256sum: update the entry below or
+# `west patch apply` refuses it.
+
+# `west patch clean` resets each patched project with `git checkout .`
+# (discarding ANY uncommitted edits there, not just ours). The schema-default
+# clean-command, `git clean -d -f -x`, is disabled: it would also delete
+# gitignored state such as modules/connectedhomeip/.environment (CHIP's
+# gn/ninja/zap env that activate.sh sources).
+checkout-command: git checkout .
+clean-command: ""
+
+patches:
+  - path: connectedhomeip/0002-sysheapmalloc-noinit-and-multiheap-reclaim.patch
+    sha256sum: 8a0de9bbf4fe053b8c02e9229aa9d0db2a51f575dbaa0bd0532b12efecf1f1f1
+    module: modules/connectedhomeip
+    author: Mark H. Spatz
+    email: mspatz@leaflabs.com
+    date: 2026-07-18
+    apply-command: git apply
+    upstreamable: false
+    comments: |
+      SysHeapMalloc: place the heap buffer `__noinit`, which on the classic
+      ESP32 moves it out of the starved dram0 bank into dram1 (load-bearing
+      there; inert on the C6's unified SRAM). Also rebuilds the allocator on
+      sys_multi_heap and adds Malloc::AddReclaimedRegion(), through which the
+      app hands the BT-controller DRAM reserve to malloc after commissioning.
+
+  - path: connectedhomeip/0003-nxp-kconfig-defaults-drop-legacy-mbedtls-symbols.patch
+    sha256sum: e508a95af57dbd4cd6ddb69615addd9eecd869db756e7c0096ca77c223d578f3
+    module: modules/connectedhomeip
+    author: Mark H. Spatz
+    email: mspatz@leaflabs.com
+    date: 2026-07-03
+    apply-command: git apply
+    upstreamable: true
+    comments: |
+      NXP Kconfig.defaults re-defaults legacy MBEDTLS_* symbols that Zephyr
+      4.4 removed; typeless defaults are fatal Kconfig errors. Upstreaming
+      needs a Zephyr-version guard story (NXP's forks keep the symbols).
+
+  - path: connectedhomeip/0004-platform-zephyr-no-entropy-source-under-psa.patch
+    sha256sum: b4784bce5e12298f2b9165b9644802e615a95ced13f2d25ebe69fdd454e13878
+    module: modules/connectedhomeip
+    author: Mark H. Spatz
+    email: mspatz@leaflabs.com
+    date: 2026-07-03
+    apply-command: git apply
+    upstreamable: true
+    comments: |
+      Skip add_entropy_source() under CHIP_CRYPTO_PSA (a stub returning
+      UNSUPPORTED there); without it InitChipStack() fails at boot with 0x6C.
+
+  - path: connectedhomeip/0006-zephyr-ble-shutdown-disable-service-mode.patch
+    sha256sum: cf4a2f91f3183c1405130c4df09a58c50a8215b71e7aae67d3f962cfe2acd4f0
+    module: modules/connectedhomeip
+    author: Mark H. Spatz
+    email: mspatz@leaflabs.com
+    date: 2026-07-04
+    apply-command: git apply
+    upstreamable: true
+    comments: |
+      Zephyr BLEManagerImpl::_Shutdown() sets mServiceMode = Disabled, so BLE
+      cannot be re-enabled onto the reclaimed BT DRAM (0002): BLE becomes
+      strictly one-way per boot. Mirrors the ESP32/NimBLE BLEManagerImpl.
+
+  - path: hal_espressif/0001-recursion-safe-esp-os-critical-section.patch
+    sha256sum: 4c041edb6338417c0573001410a9265c0e5bbbc53e8ef99e6c163a4ec504aa3b
+    module: modules/hal/espressif
+    author: Mark H. Spatz
+    email: mspatz@leaflabs.com
+    date: 2026-07-18
+    apply-command: git apply
+    upstreamable: true
+    comments: |
+      The Zephyr port's esp_os_*_critical* macros stored the irq_lock() key
+      in the lock word and broke on nested acquisition. The ESP32-C6 BLE
+      controller init nests the modem-clock lock, so IRQs were left disabled
+      and the BLE host panicked on its first blocking wait ("Context
+      switching while holding lock!"). Fix: shared depth counter + saved key
+      (single-core, LIFO). The file is shared with the classic ESP32
+      (OS_SPINLOCK 0), where it is safe.
+
+  - path: mcuboot/0001-ecdsa-psa-crypto-init.patch
+    sha256sum: a58e97e5157e2e60cc3d8cc8358da21af2500595096e4025d02ef06dd8573102
+    module: bootloader/mcuboot
+    author: Mark H. Spatz
+    email: mspatz@leaflabs.com
+    date: 2026-07-05
+    apply-command: git apply
+    upstreamable: true
+    comments: |
+      Call psa_crypto_init() in the ECDSA-PSA verify path (ed25519's PSA path
+      has it, ECDSA's does not; still missing on mcuboot main as of 2026-07).
+      Without it the bootloader wedges verifying the OTA image signature.
+      Paired with the MBEDTLS heap settings in app/sysbuild/mcuboot.conf.
+
+  - path: tf-psa-crypto/0001-esp-ecc-transparent-driver-dispatch.patch
+    sha256sum: 39b57624c6d664e69cd74b044b0461a2fc850e05dc31321cd313fffa4375170c
+    module: modules/crypto/tf-psa-crypto
+    author: Mark H. Spatz
+    email: mspatz@leaflabs.com
+    date: 2026-07-18
+    apply-command: git apply
+    upstreamable: false
+    comments: |
+      Adds ESP-ECC accelerator dispatch blocks to the checked-in generated
+      PSA driver wrappers (driver: app/src/crypto/). Compiles out unless the
+      app defines MBEDTLS_PSA_ESP_ECC_DRIVER_ENABLED via
+      zephyr_compile_definitions.
+
+  - path: zephyr/0001-ieee802154-esp32-propagate-tx-errors.patch
+    sha256sum: 0d6f9619be17f0118e5207a46689961bc4c2616e4a2019c2bb96beb4ac0dd13c
+    module: zephyr
+    author: Mark H. Spatz
+    email: mspatz@leaflabs.com
+    date: 2026-07-19
+    apply-command: git apply
+    upstreamable: true
+    comments: |
+      esp32 802.15.4 driver: propagate TX failures. transmit_failed dropped
+      the HAL's error, so esp32_tx always succeeded and OpenThread never
+      retransmitted a failed fragment; multi-fragment 6LoWPAN datagrams (SRP
+      registration) never reassembled and Matter-over-Thread commissioning
+      stalled. Mirrors the nrf5 driver. Sibling of Zephyr #113666.

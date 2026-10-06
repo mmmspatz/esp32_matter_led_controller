@@ -58,7 +58,7 @@ endif()
 
 # C6 only: PSA transparent driver feeding P-256 point multiplication to the
 # ECC accelerator. The dispatch hook lives in the tf-psa-crypto module
-# (tf-psa-crypto-patches/0001); the enable macro and esp_ecc_psa_driver.h
+# (patches/tf-psa-crypto/0001); the enable macro and esp_ecc_psa_driver.h
 # reach the tfpsacrypto external library through zephyr_interface (its
 # usage requirements resolve at generate time, after this file). Keep both
 # OFF the Kconfig/user-config route: anything in autoconf.h or the

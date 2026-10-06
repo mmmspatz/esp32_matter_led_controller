@@ -3,7 +3,7 @@
 /*
  * PSA transparent-driver entry points backing P-256 (secp256r1) with the
  * ESP32-C6 ECC point-multiplication accelerator. Dispatch into these is
- * wired by tf-psa-crypto-patches/0001; signatures follow the PSA driver
+ * wired by patches/tf-psa-crypto/0001; signatures follow the PSA driver
  * entry-point contract (keys arrive in PSA export representation: 32-byte
  * big-endian private scalar / 65-byte 0x04||X||Y public point).
  *

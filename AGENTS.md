@@ -30,7 +30,7 @@ T2 west topology: this repo is the manifest repo; `west update` populates
 `zephyr/` and `modules/` in-tree (gitignored).
 
 ```bash
-./bootstrap.sh          # once: west workspace, SDK, blobs, CHIP env, chip-patches
+./bootstrap.sh          # once: west workspace, SDK, blobs, CHIP env, patches
 source activate.sh      # every shell: CHIP env (gn/ninja/zap) + venv
 ```
 
@@ -58,43 +58,51 @@ Version pins (manifest/west.yml) — do not bump casually:
 - **CHIP master SHA 9d45993e3f** (2026-07-01; not a release: v1.5.x's
   `platform/Zephyr` uses BLE flags removed in Zephyr 4.x. This pin has
   the mbedTLS-4 include guards, #72416).
-- `chip-patches/*.patch` are re-applied by bootstrap after every
-  `west update`. Current set: 0002 SysHeapMalloc `__noinit` heap placement
-  (ESP32-specific, load-bearing) + `sys_multi_heap`/`AddReclaimedRegion()`
-  (runtime BT-DRAM reclaim), 0003 NXP Kconfig.defaults legacy
-  mbedTLS symbols (fatal typeless defaults under 4.4), 0004 skip
-  add_entropy_source under CHIP_CRYPTO_PSA (boot fails 0x6C without),
-  0006 Zephyr BLE `_Shutdown` sets `mServiceMode = Disabled` (makes BLE
-  strictly one-way for the reclaim). One patch per touched area, no
-  stacking: bootstrap's per-patch reverse-check is the idempotence test,
-  and a patch whose context another patch rewrites can neither
-  reverse-check nor re-apply — under `set -e` that kills bootstrap
-  (this happened; 0005 stacked on 0002 until they were merged).
-- `hal-patches/*.patch` (applied to `modules/hal/espressif`) re-applied the
-  same way. `hal-patches/0001` makes the port's `esp_os_*_critical*` macros
-  recursion-safe: the ESP32-C6 BLE controller init nests the modem-clock
-  critical section, and the port's non-recursive macros left IRQs disabled →
-  BLE host panic ("Context switching while holding lock!"). C6-only, but the
-  file is shared with classic ESP32 (single-core `OS_SPINLOCK 0`; safe there).
-- `tf-psa-crypto-patches/*.patch` (applied to `modules/crypto/tf-psa-crypto`)
-  re-applied the same way. 0001 adds ESP-ECC dispatch blocks to the
-  checked-in generated PSA driver wrappers, enabling the C6 P-256
-  hardware driver (`app/src/crypto/`, `CONFIG_LEDCTRL_PSA_ESP_ECC_DRIVER`;
-  Sigma2 398→~170 ms, Sigma3 963→~320 ms). Inert unless the app build
-  defines `MBEDTLS_PSA_ESP_ECC_DRIVER_ENABLED` — via
-  `zephyr_compile_definitions`, deliberately NOT Kconfig/autoconf.h,
-  which would leak into CHIP's GN build and break it. SPAKE2+ stays on
-  builtin software P-256 (no `MBEDTLS_PSA_ACCEL_*` macros — they'd
-  compile it out), and rare verify corner cases fall back to it.
-  Details: `docs/esp32c6-rework-notes.md` "P-256 acceleration".
-- `zephyr-patches/*.patch` (applied to the `zephyr` manifest project) re-applied
-  the same way. 0001 makes the esp32 802.15.4 driver propagate TX failures:
-  `esp_ieee802154_transmit_failed` dropped the HAL's error code, so `esp32_tx`
-  always returned success and the OpenThread L2 never retransmitted a failed
-  fragment — multi-fragment 6LoWPAN datagrams (e.g. SRP registration) never
-  reassembled and Matter-over-Thread commissioning stalled. Fix mirrors the
-  nrf5 driver (record the async `tx_result`, map CCA/coex→`-EBUSY`,
-  no-ack→`-ENOMSG`, else `-EIO`). Upstream candidate (sibling of Zephyr #113666).
+- Local patches to upstream projects are managed by `west patch`:
+  `manifest/zephyr/patches.yml` lists each one (project, sha256, upstream
+  status, rationale) and the files live under `manifest/zephyr/patches/`.
+  bootstrap runs `west patch clean` → `west update` → `west patch apply`; do
+  the same by hand after a pin bump. `apply` is not re-runnable (a second
+  run fails on the already-patched tree), so always `clean` first. `clean`
+  is `git checkout .` in each patched project and discards ANY uncommitted
+  edit there; the schema-default `git clean -dfx` is disabled because it
+  would delete `modules/connectedhomeip/.environment` (the CHIP env). Editing
+  a patch changes its sha256: update `patches.yml` or `apply` refuses it.
+  `west patch list` prints the set. Current set:
+  - connectedhomeip 0002: SysHeapMalloc `__noinit` heap placement
+    (ESP32-specific, load-bearing) + `sys_multi_heap`/`AddReclaimedRegion()`
+    (runtime BT-DRAM reclaim).
+  - connectedhomeip 0003: NXP Kconfig.defaults legacy mbedTLS symbols (fatal
+    typeless defaults under 4.4).
+  - connectedhomeip 0004: skip add_entropy_source under CHIP_CRYPTO_PSA (boot
+    fails 0x6C without).
+  - connectedhomeip 0006: Zephyr BLE `_Shutdown` sets
+    `mServiceMode = Disabled` (makes BLE strictly one-way for the reclaim).
+  - hal_espressif 0001: makes the port's `esp_os_*_critical*` macros
+    recursion-safe: the ESP32-C6 BLE controller init nests the modem-clock
+    critical section, and the port's non-recursive macros left IRQs disabled →
+    BLE host panic ("Context switching while holding lock!"). C6-only, but the
+    file is shared with classic ESP32 (single-core `OS_SPINLOCK 0`; safe there).
+  - mcuboot 0001: `psa_crypto_init()` in the ECDSA-PSA verify path (see the
+    OTA section).
+  - tf-psa-crypto 0001: adds ESP-ECC dispatch blocks to the checked-in
+    generated PSA driver wrappers, enabling the C6 P-256 hardware driver
+    (`app/src/crypto/`, `CONFIG_LEDCTRL_PSA_ESP_ECC_DRIVER`; Sigma2 398→~170 ms,
+    Sigma3 963→~320 ms). Inert unless the app build defines
+    `MBEDTLS_PSA_ESP_ECC_DRIVER_ENABLED` — via `zephyr_compile_definitions`,
+    deliberately NOT Kconfig/autoconf.h, which would leak into CHIP's GN build
+    and break it. SPAKE2+ stays on builtin software P-256 (no
+    `MBEDTLS_PSA_ACCEL_*` macros — they'd compile it out), and rare verify
+    corner cases fall back to it. Details: `docs/esp32c6-rework-notes.md`
+    "P-256 acceleration".
+  - zephyr 0001: makes the esp32 802.15.4 driver propagate TX failures:
+    `esp_ieee802154_transmit_failed` dropped the HAL's error code, so
+    `esp32_tx` always returned success and the OpenThread L2 never
+    retransmitted a failed fragment — multi-fragment 6LoWPAN datagrams (e.g.
+    SRP registration) never reassembled and Matter-over-Thread commissioning
+    stalled. Fix mirrors the nrf5 driver (record the async `tx_result`, map
+    CCA/coex→`-EBUSY`, no-ack→`-ENOMSG`, else `-EIO`). Upstream candidate
+    (sibling of Zephyr #113666).
 
 ## Build / flash / monitor
 
@@ -224,7 +232,7 @@ reserve) for `.bss`+`.data`, and **dram1 = 96K** (SRAM1) which on this
 port only receives `.noinit`. The build sits at ~99.7% of dram0; every
 static allocation matters. Standing arrangements:
 - All runtime allocation goes through CHIP's sys_heap (40K, `--wrap=malloc`),
-  placed in dram1 via `__noinit` (chip-patches/0002);
+  placed in dram1 via `__noinit` (patches/connectedhomeip/0002);
   `CONFIG_COMMON_LIBC_MALLOC=n` because a zero-size libc arena panics at boot.
 - Kernel pool floor lowered by re-defaulting the radios' promptless
   `HEAP_MEM_POOL_ADD_SIZE_*` in app/Kconfig (parsed first, first default
@@ -343,7 +351,7 @@ python modules/connectedhomeip/src/app/ota_image_tool.py create \
   The CHIP platform force-includes mbedTLS/PSA (so tinycrypt collides) and Zephyr 4.4's
   mbedTLS-4 split breaks legacy-mbedTLS ECDSA — only `BOOT_ECDSA_PSA` is left, and it
   is the least-exercised backend. Two fixes make it work on this no-OS, zero-libc-arena
-  bootloader, both in `sysbuild/mcuboot.conf` + `mcuboot-patches/0001`: (a)
+  bootloader, both in `sysbuild/mcuboot.conf` + `patches/mcuboot/0001`: (a)
   `MBEDTLS_ENABLE_HEAP`/`HEAP_SIZE` (its `mbedtls_calloc` otherwise hits the zero-size
   picolibc arena and the verify wedges — the original "hang in `bootutil_verify_sig`"),
   and (b) `psa_crypto_init()` in the ECDSA path (present in ed25519's PSA path, missing

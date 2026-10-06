@@ -118,13 +118,13 @@ First flash + boot of the reworked board. Verified working:
   GPIO9's DTR path is unchanged from the classic board. (ModemManager, still
   running, is not a factor: esptool reached the chip through it.)
 - **MCUboot on RISC-V**: validates slot 0 (ECDSA-P256 / PSA verify,
-  mcuboot-patches/0001) and boots the app — answers the MCUboot open
+  patches/mcuboot/0001) and boots the app — answers the MCUboot open
   question below.
 - **Zephyr 4.4.1 boots**, WiFi/coex ROM inits, and the **BLE controller
   enables** (`esp_bt_controller_init`/`_enable` OK; BT MAC + libbtbb PHY
   print).
 
-**RESOLVED (fixed in `hal-patches/0001`).** BLE host init panicked:
+**RESOLVED (fixed in `patches/hal_espressif/0001`).** BLE host init panicked:
 `bt_enable()` → Zephyr host `common_init()` (HCI_Reset) blocked on its
 completion semaphore **with IRQs already locked** → `kswap.h:98` "Context
 switching while holding lock!", FATAL ERROR 4, halt. Root cause: the
@@ -177,7 +177,7 @@ device-side). Caveats found, all worth hardening:
 
 **Implemented**: `LEDCTRL_PSA_ESP_ECC_DRIVER` (default y on C6) registers a
 PSA transparent driver (`app/src/crypto/`, dispatch hook
-`tf-psa-crypto-patches/0001`) that feeds P-256 point multiplication to the
+`patches/tf-psa-crypto/0001`) that feeds P-256 point multiplication to the
 ECC engine. HW-verified end-to-end: chip-tool CASE + cluster control on the
 driver build, Sigma2 generation **398 ms → ~170 ms** and Sigma3 processing
 **963 ms → ~320 ms** (device-side log timestamps, multiple samples) — the
@@ -246,8 +246,8 @@ the alternatives were dead ends (all verified in the pinned trees):
 
 | Classic-ESP32 arrangement | On the C6 |
 |---|---|
-| Split DRAM banks, dram0 at 99.7%, `__noinit` heap relocation (chip-patches/0002), `ESP32_REGION_1_NOINIT` pin | Gone: single unified 512K HP-SRAM bank. Patch 0002 stays for the old board but is inert on C6 (`__noinit` just lands in the same bank). |
-| 56K BT-controller DRAM reserve + post-commissioning reclaim (chip-patches/0002/0006, `LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING`) | Gone: no linker carve-out exists on C6 (BT memory is kernel-heap). The Kconfig gates on `SOC_SERIES_ESP32`, so the reclaim (and its one-way-BLE restriction!) compiles out — BLE stays available for additional-fabric commissioning. |
+| Split DRAM banks, dram0 at 99.7%, `__noinit` heap relocation (patches/connectedhomeip/0002), `ESP32_REGION_1_NOINIT` pin | Gone: single unified 512K HP-SRAM bank. Patch 0002 stays for the old board but is inert on C6 (`__noinit` just lands in the same bank). |
+| 56K BT-controller DRAM reserve + post-commissioning reclaim (patches/connectedhomeip/0002 + 0006, `LEDCTRL_RECLAIM_BT_DRAM_AFTER_COMMISSIONING`) | Gone: no linker carve-out exists on C6 (BT memory is kernel-heap). The Kconfig gates on `SOC_SERIES_ESP32`, so the reclaim (and its one-way-BLE restriction!) compiles out — BLE stays available for additional-fabric commissioning. |
 | Kernel-heap floor lowering (`HEAP_MEM_POOL_ADD_SIZE_ESP_WIFI/BT` re-defaults 24576/16384) | Not needed: C6 keeps the soak-tested driver defaults (51200 + 50000). Now conditional on `SOC_SERIES_ESP32` in app/Kconfig. |
 | WiFi driver buffer trims, AMPDU off, `MBEDTLS_PSA_KEY_SLOT_COUNT=32`, 40K CHIP heap | Stock defaults; CHIP heap uses chip-module's 12K default (measured peak ~8K). |
 | `rand_shim.c` (WiFi blob's strong `random()` vs picolibc) | Not needed: the C6 hal adapter/blobs export no `random`/`rand`/`srand` (verified with nm + source grep). Now compiled only for `SOC_SERIES_ESP32`. |
@@ -279,7 +279,7 @@ Bring-up results above:
 - BLE is a different controller generation (`libble_app`, BLE-5 feature
   set) driven through the same `esp32_bt_hci` VHCI driver — CHIPoBLE
   should be transparent, but commissioning needs a full smoke test.
-- MCUboot ECDSA-P256/PSA verify (mcuboot-patches/0001 + heap overlay) is
+- MCUboot ECDSA-P256/PSA verify (patches/mcuboot/0001 + heap overlay) is
   arch-independent in principle; confirm the C6 MCUboot image links the
   same backend and boots.
 - Kernel heap: `HEAP_MEM_POOL_ADD_SIZE_*` defaults total ~105K on C6.

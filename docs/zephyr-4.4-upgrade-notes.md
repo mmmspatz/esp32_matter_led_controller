@@ -16,7 +16,7 @@ generic-Zephyr chip-module build against 4.4.x.
   (master 2026-07-01; contains #72415, #72416, #72701, #72698)
 - Zephyr SDK **1.0.1** (new versioning scheme; toolchain now lives at
   `~/zephyr-sdk-1.0.1/gnu/xtensa-espressif_esp32_zephyr-elf`)
-- chip-patches: 0001 deleted; 0002 unchanged; **0003 and 0004 new**
+- connectedhomeip patches: 0001 deleted; 0002 unchanged; **0003 and 0004 new**
   (see below)
 
 ## What the checklist got right
@@ -43,7 +43,7 @@ generic-Zephyr chip-module build against 4.4.x.
 
 ## What the checklist got wrong / missed
 
-1. **chip-patches/0001 did NOT fail to apply.** #72415 removed the
+1. **connectedhomeip patch 0001 did NOT fail to apply.** #72415 removed the
    `assert()` calls but the patch's context lines survived, so it
    applied cleanly as dead weight. Deleted after grep-verifying no
    `assert(` remains in WiFiManager.cpp. Lesson: verify by symbol, not
@@ -64,7 +64,7 @@ generic-Zephyr chip-module build against 4.4.x.
 5. **config/zephyr/chip-module/Kconfig.defaults now rsources
    config/nxp/chip-module/Kconfig.defaults**, which re-defaults seven
    legacy mbedTLS symbols; typeless defaults are fatal under 4.4
-   → new **chip-patches/0003** drops them. (Upside of the same
+   → new **patches/connectedhomeip/0003** drops them. (Upside of the same
    rsource: `CHIP_ENABLE_WIFI_STATION` now defaults y with CHIP_WIFI,
    retiring one of the "upstream filing opportunities" below.)
 6. **Boot failed with 0x6C (UNSUPPORTED_CHIP_FEATURE)**:
@@ -72,7 +72,7 @@ generic-Zephyr chip-module build against 4.4.x.
    source, which is a stub under the PSA PAL, and its guard doesn't
    know CHIP_CRYPTO_PSA (on 4.4+ESP32 the PSA RNG is
    `MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG` on the TRNG csprng driver, so no
-   guard Kconfig is set) → new **chip-patches/0004** gates the block
+   guard Kconfig is set) → new **patches/connectedhomeip/0004** gates the block
    on `!CHIP_CRYPTO_PSA`. Prime upstream candidate.
 
 ## RAM outcome (CCT image)
@@ -112,9 +112,9 @@ brought back under the wire by halving the PSA key slots (−1280).
 
 ## Upstream filing opportunities (fork carries them meanwhile)
 
-- **chip-patches/0004**: add_entropy_source called under
+- **patches/connectedhomeip/0004**: add_entropy_source called under
   CHIP_CRYPTO_PSA on generic Zephyr → boot failure. Unreported.
-- **chip-patches/0003**: NXP Kconfig.defaults re-defaults legacy
+- **patches/connectedhomeip/0003**: NXP Kconfig.defaults re-defaults legacy
   mbedTLS symbols, fatal on Zephyr 4.4. Needs a version-guard story
   (NXP's downstream Zephyr still has the symbols). Unreported.
 - chip-module `Kconfig.defaults` sets `NET_IPV6_NBR_CACHE` default n
@@ -122,7 +122,7 @@ brought back under the wire by halving the PSA key slots (−1280).
   `net_if_start_rs`. Unreported.
 - hal_espressif's strong `random()` vs picolibc's rand family (our
   rand_shim.c). Unreported.
-- `__noinit` on CHIP's SysHeapMalloc buffer (chip-patches/0002).
+- `__noinit` on CHIP's SysHeapMalloc buffer (patches/connectedhomeip/0002).
 - The scaffold's NetworkCommissioning Init-before-InitServer race
   (fixed in our vendored copy; upstream now ReturnErrorOnFailure's the
   result but still calls it on the wrong thread, before InitServer).

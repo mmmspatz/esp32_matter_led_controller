@@ -35,6 +35,12 @@ pip install --upgrade --quiet pip west
 if [ ! -d .west ]; then
     west init -l manifest
 fi
+# Drop our patches before updating, so a pin bump checks out over pristine
+# trees and the apply below starts clean. `west patch` is a Zephyr extension
+# command, so a fresh workspace (no zephyr/ yet) has nothing to clean anyway.
+if [ -d zephyr ]; then
+    west patch clean
+fi
 west update
 
 pip install --quiet pytest pyserial ecdsa qrcode
@@ -60,73 +66,10 @@ modules/connectedhomeip/scripts/checkout_submodules.py --shallow
 # never referenced once chip_enable_openthread=false.
 (cd modules/connectedhomeip && git submodule deinit -f third_party/openthread/repo)
 
-# Local patches to CHIP that have not (yet) landed upstream. `west update`
-# resets the tree, so bootstrap re-applies them idempotently.
-shopt -s nullglob
-for p in "$PWD"/chip-patches/*.patch; do
-    if git -C modules/connectedhomeip apply --reverse --check "$p" 2>/dev/null; then
-        echo "chip patch already applied: $(basename "$p")"
-    else
-        echo "applying chip patch: $(basename "$p")"
-        git -C modules/connectedhomeip apply "$p"
-    fi
-done
-
-# Local patches to MCUboot (west module, reset by `west update`). 0001 adds the
-# psa_crypto_init() that MCUboot's ECDSA-PSA verify path is missing (ed25519 has
-# it) -- without it the ESP32 bootloader wedges verifying the OTA signature.
-for p in "$PWD"/mcuboot-patches/*.patch; do
-    if git -C bootloader/mcuboot apply --reverse --check "$p" 2>/dev/null; then
-        echo "mcuboot patch already applied: $(basename "$p")"
-    else
-        echo "applying mcuboot patch: $(basename "$p")"
-        git -C bootloader/mcuboot apply "$p"
-    fi
-done
-
-# Local patches to TF-PSA-Crypto (west module, reset by `west update`). 0001
-# adds the ESP32-C6 ECC-accelerator transparent driver to the (checked-in
-# generated) PSA driver-wrapper dispatch; the driver itself lives in
-# app/src/crypto and the blocks compile out unless the app build defines
-# MBEDTLS_PSA_ESP_ECC_DRIVER_ENABLED (zephyr_compile_definitions).
-for p in "$PWD"/tf-psa-crypto-patches/*.patch; do
-    if git -C modules/crypto/tf-psa-crypto apply --reverse --check "$p" 2>/dev/null; then
-        echo "tf-psa-crypto patch already applied: $(basename "$p")"
-    else
-        echo "applying tf-psa-crypto patch: $(basename "$p")"
-        git -C modules/crypto/tf-psa-crypto apply "$p"
-    fi
-done
-
-# Local patches to hal_espressif (west module, reset by `west update`). 0001
-# makes the esp_os_*_critical* macros recursion-safe; without it the ESP32-C6
-# BLE controller init nests the modem-clock critical section, leaves IRQs
-# disabled, and the BLE host panics on its first blocking wait ("Context
-# switching while holding lock!").
-for p in "$PWD"/hal-patches/*.patch; do
-    if git -C modules/hal/espressif apply --reverse --check "$p" 2>/dev/null; then
-        echo "hal patch already applied: $(basename "$p")"
-    else
-        echo "applying hal patch: $(basename "$p")"
-        git -C modules/hal/espressif apply "$p"
-    fi
-done
-
-# Local patches to Zephyr itself (west manifest project, reset by `west update`).
-# 0001 makes the esp32 802.15.4 driver propagate TX failures: its
-# esp_ieee802154_transmit_failed callback dropped the HAL's error, so esp32_tx
-# always returned success and OpenThread never retransmitted a failed fragment
-# -> multi-fragment 6LoWPAN datagrams (SRP registration) never reassembled and
-# Matter-over-Thread commissioning stalled. Upstream candidate.
-for p in "$PWD"/zephyr-patches/*.patch; do
-    if git -C zephyr apply --reverse --check "$p" 2>/dev/null; then
-        echo "zephyr patch already applied: $(basename "$p")"
-    else
-        echo "applying zephyr patch: $(basename "$p")"
-        git -C zephyr apply "$p"
-    fi
-done
-shopt -u nullglob
+# Local patches to upstream projects (manifest/zephyr/patches.yml). Applied
+# onto the trees `west patch clean` reset above; --roll-back undoes a
+# half-applied set if one stops applying.
+west patch apply --roll-back
 
 # CHIP's own environment (gn, ninja, zap, ...) via pigweed CIPD.
 bash modules/connectedhomeip/scripts/bootstrap.sh -p none

@@ -121,6 +121,7 @@ hours (suspected WiFi-blob death). Thread builds route around it, which is
 part of why the C6 defaults to Thread; the classic board has no such escape.
 
 Getting here took patching four upstream trees — CHIP, the Espressif HAL,
-TF-PSA-Crypto, and Zephyr's esp32 802.15.4 driver. Those patches live in
-`*-patches/` and are re-applied by `bootstrap.sh` after every `west
-update`; [AGENTS.md](AGENTS.md#workspace) says what each one is for.
+TF-PSA-Crypto, and Zephyr's esp32 802.15.4 driver. Those patches are
+listed in `manifest/zephyr/patches.yml` and applied by `west patch` (which
+`bootstrap.sh` runs); [AGENTS.md](AGENTS.md#workspace) says what each one
+is for.
