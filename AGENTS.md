@@ -18,11 +18,15 @@ below is classic-ESP32-only and compiles out on the C6. See
 and what stops applying; `docs/esp32c6-thread-notes.md` for the transport
 design and the Thread bring-up.
 
-**Open bug, unwatched:** on WiFi the device drops fully off the network after
-1.7–6 h (looks like WiFi-blob death, not heap). Never root-caused; moving the
-C6 to Thread routed around it rather than fixing it. It still affects the
-classic ESP32, which has no other transport, and it will not resurface
-organically — investigating needs a deliberate soak on a WiFi build.
+**Open bug:** on WiFi the device drops fully off the network after 1.7–6 h
+(looks like WiFi-blob death, not heap). Never root-caused; moving the C6 to
+Thread routed around it rather than fixing it, and it still affects the classic
+ESP32, which has no other transport. A first 8 h soak on an instrumented C6
+WiFi build ran clean (2026-08-06), but proves less than it looks: the C6 was
+only ever a WiFi device for one day (07-18→07-19), so the original observations
+are almost certainly classic-board-only, and the C6 runs ~2× the WiFi buffers
+and kernel radio pool that the classic RAM diet allows. Tools, full result and
+the next experiment: `docs/esp32c6-thread-notes.md`, "Investigating it".
 
 ## Workspace
 
